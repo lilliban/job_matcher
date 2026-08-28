@@ -80,8 +80,9 @@ Lascia GEMINI_API_KEY vuoto in .env.
 python run.py
 Apri il browser su http://localhost:8000
 
-# Struttura del progetto
-Plaintext
+## Struttura del progetto
+
+```text
 job_matcher/
 ├── app/
 │   ├── core/
@@ -128,7 +129,7 @@ job_matcher/
 ├── README.md
 ├── requirements.txt
 └── run.py                      # Entry point di avvio
-
+```
 
 # Note sulla legalità
 Il sistema effettua scraping su portali pubblici per esclusivo uso personale. Per utilizzi differenti o commerciali, si raccomanda di verificare i Terms of Service delle singole piattaforme e di utilizzare API ufficiali dove disponibili.   
