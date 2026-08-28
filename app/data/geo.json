@@ -1,0 +1,95 @@
+{
+  "_nota": "Gerarchia continente > stato > regione. I nomi dei paesi sono in INGLESE perche' e' la forma che i portali globali riconoscono (vedi ADR-019): un nome che il loro database geografico non riconosce non da' errore, li fa ricadere sugli Stati Uniti. Le regioni sono nella lingua locale, che e' come le scrivono i portali nazionali. Ambito volutamente limitato ai paesi effettivamente coperti da JOB_BOARDS in config.py: aggiungere un paese qui senza aggiungere i suoi portali non serve a niente.",
+  "continents": [
+    {
+      "code": "EU",
+      "name": "Europa",
+      "countries": ["IT", "CH", "DE", "AT", "FR", "ES", "UK"]
+    }
+  ],
+  "countries": [
+    {
+      "code": "IT",
+      "name": "Italia",
+      "search_name": "Italy",
+      "regions": [
+        "Abruzzo", "Basilicata", "Calabria", "Campania", "Emilia-Romagna",
+        "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche",
+        "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana",
+        "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto"
+      ]
+    },
+    {
+      "code": "CH",
+      "name": "Svizzera",
+      "search_name": "Switzerland",
+      "regions": [
+        "Zürich", "Bern", "Luzern", "Basel-Stadt", "Basel-Landschaft",
+        "Genève", "Vaud", "Ticino", "St. Gallen", "Aargau", "Neuchâtel",
+        "Valais", "Fribourg", "Thurgau", "Graubünden", "Zug"
+      ]
+    },
+    {
+      "code": "DE",
+      "name": "Germania",
+      "search_name": "Germany",
+      "regions": [
+        "Baden-Württemberg", "Bayern", "Berlin", "Brandenburg", "Bremen",
+        "Hamburg", "Hessen", "Mecklenburg-Vorpommern", "Niedersachsen",
+        "Nordrhein-Westfalen", "Rheinland-Pfalz", "Saarland", "Sachsen",
+        "Sachsen-Anhalt", "Schleswig-Holstein", "Thüringen"
+      ]
+    },
+    {
+      "code": "AT",
+      "name": "Austria",
+      "search_name": "Austria",
+      "regions": [
+        "Wien", "Niederösterreich", "Oberösterreich", "Steiermark", "Tirol",
+        "Kärnten", "Salzburg", "Vorarlberg", "Burgenland"
+      ]
+    },
+    {
+      "code": "FR",
+      "name": "Francia",
+      "search_name": "France",
+      "regions": [
+        "Île-de-France", "Auvergne-Rhône-Alpes", "Nouvelle-Aquitaine",
+        "Occitanie", "Hauts-de-France", "Grand Est", "Provence-Alpes-Côte d'Azur",
+        "Pays de la Loire", "Normandie", "Bretagne", "Bourgogne-Franche-Comté",
+        "Centre-Val de Loire", "Corse"
+      ]
+    },
+    {
+      "code": "ES",
+      "name": "Spagna",
+      "search_name": "Spain",
+      "regions": [
+        "Madrid", "Cataluña", "Andalucía", "Comunidad Valenciana", "País Vasco",
+        "Galicia", "Castilla y León", "Castilla-La Mancha", "Aragón", "Murcia",
+        "Islas Baleares", "Canarias", "Asturias", "Navarra", "Cantabria",
+        "Extremadura", "La Rioja"
+      ]
+    },
+    {
+      "code": "UK",
+      "name": "Regno Unito",
+      "search_name": "United Kingdom",
+      "regions": [
+        "Greater London", "South East England", "South West England",
+        "East of England", "West Midlands", "East Midlands",
+        "Yorkshire and the Humber", "North West England", "North East England",
+        "Scotland", "Wales", "Northern Ireland"
+      ]
+    },
+    {
+      "code": "US",
+      "name": "Stati Uniti",
+      "search_name": "United States",
+      "regions": [
+        "California", "New York", "Texas", "Massachusetts", "Washington",
+        "Illinois", "Colorado", "Georgia", "Florida", "Pennsylvania"
+      ]
+    }
+  ]
+}

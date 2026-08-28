@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JobMatcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="rail">
+    <div class="rail-mark">
+      <span class="mark-glyph">JM</span>
+      <span class="mark-word">JobMatcher</span>
+    </div>
+
+    <nav class="rail-nav">
+      <button class="rail-item is-active" data-view="profile">
+        <span class="rail-idx">01</span>
+        <span class="rail-label">Profilo</span>
+      </button>
+      <button class="rail-item" data-view="collections">
+        <span class="rail-idx">02</span>
+        <span class="rail-label">Aziende</span>
+      </button>
+      <button class="rail-item" data-view="sessions">
+        <span class="rail-idx">03</span>
+        <span class="rail-label">Ricerche</span>
+      </button>
+      <button class="rail-item" data-view="intelligence">
+        <span class="rail-idx">04</span>
+        <span class="rail-label">Resoconto</span>
+      </button>
+    </nav>
+
+    <div class="rail-foot">
+      <div class="rail-user" id="railUser">Nessun profilo</div>
+      <div class="rail-status" id="railStatus">
+        <span class="dot"></span><span id="railStatusText">Verifico...</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="stage">
+
+    <!-- ---------- VIEW: PROFILE ---------- -->
+    <section class="view is-visible" id="view-profile">
+      <header class="stage-head">
+        <p class="eyebrow">Passo uno</p>
+        <h1 class="display">Chi sei</h1>
+        <p class="lede">Questo profilo vale per tutte le ricerche. Le competenze tecniche specifiche di un ruolo le indicherai dopo, quando crei la ricerca.</p>
+      </header>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Anagrafica</h2></div>
+        <div class="grid-2">
+          <label class="field">
+            <span class="field-label">Nome e cognome</span>
+            <input id="pfName" type="text" placeholder="Mario Rossi">
+          </label>
+          <label class="field">
+            <span class="field-label">Email</span>
+            <input id="pfEmail" type="email" placeholder="mario@esempio.it">
+          </label>
+          <label class="field">
+            <span class="field-label">Telefono</span>
+            <input id="pfPhone" type="text" placeholder="+39 333 1234567">
+          </label>
+          <label class="field">
+            <span class="field-label">Dove vivi</span>
+            <input id="pfLocation" type="text" placeholder="Civitanova Marche, MC">
+          </label>
+          <label class="field field-wide">
+            <span class="field-label">Chi sei professionalmente</span>
+            <textarea id="pfBio" rows="3" readonly
+              placeholder="Carica il CV: questa sintesi viene ricavata da lì."></textarea>
+            <span class="field-help">
+              Ricavata dal CV base, non si scrive a mano — due righe scritte una
+              volta invecchiano, il CV invece lo aggiorni.
+              <button class="btn btn-micro" id="btnRegenBio" type="button">Rigenera dal CV</button>
+            </span>
+          </label>
+        </div>
+        <div class="panel-foot">
+          <span class="hint" id="profileHint"></span>
+          <input type="file" id="cvFileInput" accept="application/pdf" class="hidden">
+          <button class="btn btn-ghost" id="btnUploadCV">Carica CV</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panelSoft" data-locked="true">
+        <div class="panel-head">
+          <h2>Soft skill</h2>
+          <p class="panel-note">Sono tue, non cambiano da un ruolo all'altro.</p>
+        </div>
+        <div class="chip-field" id="softCatalog"></div>
+
+        <!-- Nuovo blocco suggerimenti simili -->
+        <div id="softSimilarBox" class="soft-similar hidden">
+          <div class="soft-similar-title">✨ Simili a <span id="softSimilarName"></span></div>
+          <div class="chip-field" id="softSimilarChips"></div>
+        </div>
+
+        <div class="panel-foot">
+          <span class="hint" id="softHint">Seleziona quelle che ti rappresentano</span>
+        </div>
+      </div>
+
+
+    
+            
+            <!-- Pannello Lingue conosciute -->
+      <div class="panel" id="panelLanguages" data-locked="true">
+        <div class="panel-head">
+          <h2>Lingue conosciute</h2>
+          <p class="panel-note">Servono per filtrare gli annunci che richiedono lingue che non parli.</p>
+        </div>
+        <div class="inline-form">
+          <select id="langName">
+            <option value="italian">Italiano</option>
+            <option value="english">Inglese</option>
+            <option value="german">Tedesco</option>
+            <option value="french">Francese</option>
+            <option value="spanish">Spagnolo</option>
+            <option value="portuguese">Portoghese</option>
+            <option value="dutch">Olandese</option>
+          </select>
+          <select id="langLevel">
+            <option value="madrelingua">Madrelingua</option>
+            <option value="A1">A1 - Base</option>
+            <option value="A2">A2 - Elementare</option>
+            <option value="B1">B1 - Intermedio</option>
+            <option value="B2">B2 - Intermedio-alto</option>
+            <option value="C1">C1 - Avanzato</option>
+            <option value="C2">C2 - Padronanza</option>
+          </select>
+          <button class="btn btn-ghost" id="btnAddLang">Aggiungi</button>
+        </div>
+        <ul class="stack" id="langList"></ul>
+      </div>
+      
+      <div class="panel" id="panelHard" data-locked="true">
+        <div class="panel-head">
+          <h2>Competenze tecniche</h2>
+          <p class="panel-note">Cosa sai fare, indipendentemente da dove l'hai imparato.</p>
+        </div>
+        <div class="inline-form">
+          <input id="hsName" type="text" placeholder="Python">
+          <select id="hsLevel">
+            <option value="beginner">Base</option>
+            <option value="intermediate" selected>Intermedio</option>
+            <option value="expert">Avanzato</option>
+          </select>
+          <input id="hsYears" type="number" min="0" max="50" value="1" style="width:5rem">
+          <select id="hsVia">
+            <option value="work">Sul lavoro</option>
+            <option value="university">Università</option>
+            <option value="self_taught">Autodidatta</option>
+            <option value="certification">Certificazione</option>
+          </select>
+          <button class="btn btn-ghost" id="btnAddHard">Aggiungi</button>
+        </div>
+        <ul class="stack" id="hardList"></ul>
+      </div>
+
+      <div class="panel" id="panelExp" data-locked="true">
+        <div class="panel-head"><h2>Esperienze</h2></div>
+        <div class="grid-2">
+          <label class="field"><span class="field-label">Azienda</span><input id="exCompany" type="text" placeholder="Apposta"></label>
+          <label class="field"><span class="field-label">Ruolo</span><input id="exRole" type="text" placeholder="Backend Developer"></label>
+          <label class="field"><span class="field-label">Da</span><input id="exStart" type="text" placeholder="03/2023"></label>
+          <label class="field"><span class="field-label">A</span><input id="exEnd" type="text" placeholder="in corso"></label>
+          <label class="field field-wide"><span class="field-label">Cosa facevi</span><textarea id="exDesc" rows="2" placeholder="Sviluppo del backend CMS per la gestione ordini."></textarea></label>
+          <label class="field field-wide"><span class="field-label">Tecnologie usate</span><input id="exSkills" type="text" placeholder="PHP, Yii, MySQL"></label>
+        </div>
+        <div class="panel-foot"><button class="btn btn-ghost" id="btnAddExp">Aggiungi esperienza</button></div>
+        <ul class="stack" id="expList"></ul>
+      </div>
+
+      <div class="panel" id="panelEdu" data-locked="true">
+        <div class="panel-head"><h2>Formazione</h2></div>
+        <div class="grid-2">
+          <label class="field"><span class="field-label">Istituto</span><input id="edInst" type="text" placeholder="Università di Camerino"></label>
+          <label class="field"><span class="field-label">Titolo</span><input id="edDeg" type="text" placeholder="Laurea Magistrale"></label>
+          <label class="field"><span class="field-label">Ambito</span><input id="edField" type="text" placeholder="Computer Science"></label>
+          <label class="field"><span class="field-label">Anno</span><input id="edYear" type="text" placeholder="2026"></label>
+        </div>
+        <div class="panel-foot"><button class="btn btn-ghost" id="btnAddEdu">Aggiungi titolo</button></div>
+        <ul class="stack" id="eduList"></ul>
+      </div>
+
+      <div class="panel" id="panelSessions" data-locked="true">
+        <div class="panel-head">
+          <h2>Le tue ricerche</h2>
+          <p class="panel-note">Clicca una ricerca conclusa per vederne il Resoconto, una in corso o non ancora avviata per configurarla.</p>
+        </div>
+        <div id="sessionList" class="session-grid"></div>
+      </div>
+    </section>
+
+    <!-- ---------- VIEW: SESSIONS ---------- -->
+    <!-- ---------- VIEW: COLLEZIONI AZIENDE ---------- -->
+    <section class="view" id="view-collections">
+      <header class="stage-head">
+        <p class="eyebrow">Passo due</p>
+        <h1 class="display">Le tue liste di aziende</h1>
+        <p class="lede">Raggruppa le aziende che ti interessano. Da ogni lista puoi
+          farti suggerire aziende simili — più la lista è definita, più i
+          suggerimenti lo sono. Poi applichi una lista a una ricerca.</p>
+      </header>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Nuova lista</h2>
+          <p class="panel-note">Per tema, per zona, per settore: come preferisci.</p>
+        </div>
+        <div class="inline-form">
+          <input id="collName" type="text" placeholder="Es. Tech nelle Marche">
+          <input id="collDesc" type="text" placeholder="Descrizione (facoltativa)">
+          <button class="btn btn-ghost" id="btnCreateCollection">Crea lista</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Parti da un tema</h2>
+          <p class="panel-note">Scorciatoie per riempire una lista in fretta.</p>
+        </div>
+        <div class="chip-field" id="themeChips"></div>
+      </div>
+
+      <div id="collectionList" class="stack"></div>
+
+      <div class="panel hidden" id="collectionDetail">
+        <div class="panel-head">
+          <h2 id="collDetailName">—</h2>
+          <p class="panel-note" id="collDetailSummary"></p>
+        </div>
+        <div class="inline-form">
+          <input id="collAddCompany" type="text" placeholder="Aggiungi un'azienda per nome">
+          <button class="btn btn-ghost" id="btnCollAdd">Aggiungi</button>
+          <button class="btn btn-ghost" id="btnCollSimilar">Trova simili alla lista</button>
+        </div>
+        <div id="collSimilarResults" class="card-row"></div>
+        <ul class="stack" id="collMembers"></ul>
+        <div class="panel-foot">
+          <select id="collApplyTarget"></select>
+          <button class="btn btn-primary" id="btnCollApply">Applica a questa ricerca</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-sessions">
+      <header class="stage-head">
+        <p class="eyebrow">Passo due</p>
+        <h1 class="display">Cosa cerchi</h1>
+        <p class="lede">Una ricerca per ogni mestiere. Puoi cercare come data analyst e come barista in parallelo: sono due ricerche separate, stesso profilo.</p>
+      </header>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Nuova ricerca</h2></div>
+        <div class="grid-2">
+          <label class="field">
+            <span class="field-label">Ruolo</span>
+            <div class="autocomplete">
+              <input id="ssRole" type="text" placeholder="Data Analyst" autocomplete="off">
+              <ul class="autocomplete-list" id="ssRoleSuggest"></ul>
+            </div>
+          </label>
+          <label class="field">
+            <span class="field-label">Paese o continente</span>
+            <select id="ssCountry">
+              <option value="">Nessuna preferenza</option>
+            </select>
+            <span class="field-help">Popolato da app/data/geo.json.</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Zona</span>
+            <select id="ssLocation">
+              <option value="">Tutto il paese</option>
+            </select>
+            <span class="field-help" id="ssLocationHelp">Scegli prima un paese.</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Contratto</span>
+            <select id="ssContract">
+              <option value="">Indifferente</option>
+              <option value="full-time">Full time</option>
+              <option value="part-time">Part time</option>
+              <option value="internship">Stage</option>
+              <option value="freelance">Freelance</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Soglia di compatibilità</span>
+            <div class="slider-row">
+              <input id="ssThreshold" type="range" min="0" max="100" step="5" value="50">
+              <output id="ssThresholdOut" class="mono">50%</output>
+            </div>
+            <span class="field-help">Sotto questa soglia l'annuncio viene scartato, ma il motivo finisce nel resoconto.</span>
+          </label>
+          <div class="field field-wide hidden" id="preferredCompaniesFieldWrap">
+            <span class="field-label">Aziende d'interesse</span>
+            <details class="preferred-companies-field" id="preferredCompaniesField">
+              <summary id="preferredCompaniesSummary">Aziende d'interesse</summary>
+              <div class="preferred-companies-checklist" id="preferredCompaniesChecklist"></div>
+            </details>
+            <span class="field-help">Dal tuo profilo — aziende scelte in ricerche precedenti, tutte spuntate di default. Deseleziona quelle che non vuoi per questa ricerca (restano comunque nel profilo); la "×" invece smette di seguirle del tutto.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Competenze e aziende fanno parte della DEFINIZIONE della ricerca,
+           quindi stanno prima di "Crea ricerca" e non dopo. Prima erano
+           dentro #sessionConfig e comparivano solo a sessione già creata:
+           nessun vincolo tecnico lo imponeva, gli endpoint di scoperta non
+           usano la sessione. -->
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Competenze richieste dal ruolo</h2>
+          <p class="panel-note">Cosa chiede il mercato per questa posizione. Serve a capire cosa ti manca.</p>
+        </div>
+        <div class="panel-foot" style="margin-bottom:1rem">
+          <button class="btn btn-ghost" id="btnSuggestSkills">Suggerisci competenze per questo ruolo</button>
+          <span class="hint" id="skillHint"></span>
+        </div>
+        <div class="chip-field" id="skillSuggestions"></div>
+        <ul class="stack" id="sessionSkillList"></ul>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Aziende target</h2>
+          <p class="panel-note">Aggiungine una e ne compaiono altre simili. Più ne scegli, più i suggerimenti si affinano.</p>
+        </div>
+        <div class="tabs" id="companyTabs">
+          <button class="tab is-active" data-tab="byname">Per nome</button>
+          <button class="tab" data-tab="bylocal">Per zona</button>
+        </div>
+        <div class="tab-body is-visible" data-body="byname">
+          <div class="inline-form">
+            <input id="coQuery" type="text" placeholder="Nome azienda o settore">
+            <button class="btn btn-ghost" id="btnSearchCompany">Cerca aziende</button>
+          </div>
+        </div>
+        <div class="tab-body" data-body="bylocal">
+          <div class="inline-form">
+            <input id="coSector" type="text" placeholder="Settore — es. informatica">
+            <input id="coArea" type="text" placeholder="Zona — es. Civitanova Marche">
+            <button class="btn btn-ghost" id="btnSearchLocal">Cerca vicino</button>
+          </div>
+          <p class="field-help" style="margin-top:.5rem">Trova anche le piccole aziende locali che i portali non indicizzano.</p>
+        </div>
+        <div id="companyResults" class="card-row"></div>
+        <div id="similarBlock" class="hidden">
+          <div class="similar-head">
+            <span class="eyebrow">Simili a quelle che hai scelto</span>
+            <button class="btn btn-micro" id="btnRefreshSimilar">Aggiorna</button>
+          </div>
+          <div id="similarResults" class="card-row"></div>
+        </div>
+        <ul class="stack" id="targetList"></ul>
+      </div>
+
+      <div class="panel panel-action">
+        <div class="action-copy">
+          <h2>Crea e avvia</h2>
+          <p class="panel-note">Cerco sulle careers page delle aziende che hai scelto e sui portali del paese selezionato. Per ogni match sopra soglia genero CV, lettera ed email.</p>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btnCreateSession">Crea ricerca</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Analizza annuncio da URL</h2>
+          <p class="panel-note">Incolla un link a un annuncio e genera CV, lettera ed email su misura.</p>
+        </div>
+        <div class="inline-form">
+          <input id="customUrl" type="url" placeholder="https://it.indeed.com/...">
+          <button class="btn btn-ghost" id="btnAnalyzeUrl">Analizza annuncio</button>
+        </div>
+        <div id="customResult" class="card-row"></div>
+      </div>
+
+      <!-- Workspace della ricerca aperta -->
+      <div id="sessionConfig" class="hidden">
+        <div class="rule"><span class="rule-tag mono" id="cfgTag">—</span></div>
+
+        <!-- Documenti base della ricerca: il CV generale da cui derivano
+             le versioni per singola azienda -->
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Documenti di partenza</h2>
+            <p class="panel-note">Il CV generale da cui vengono adattate le versioni per ogni azienda.</p>
+          </div>
+          <div id="wsBaseDocs" class="stack"></div>
+        </div>
+
+        <!-- Aziende con l'esito dell'ultima ricerca su ciascuna -->
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Aziende di questa ricerca</h2>
+            <p class="panel-note">Dove ho già cercato, quando, e cosa ho trovato.</p>
+          </div>
+          <ul class="stack" id="wsCompanies"></ul>
+        </div>
+
+        <div class="panel panel-action">
+          <div class="action-copy">
+            <h2>Rilancia la ricerca</h2>
+            <p class="panel-note">Le aziende interrogate di recente vengono saltate: si riusa quanto già raccolto invece di ripetere le richieste.</p>
+          </div>
+          <button class="btn btn-primary btn-lg" id="btnRunSearch">Avvia ricerca lavoro</button>
+        </div>
+
+        <!-- E2: esecuzione e risultati vivono qui, nella stessa schermata
+             della ricerca, invece che in una view separata. Una ricerca è
+             una cosa sola: la sua definizione, il suo avanzamento e i suoi
+             esiti. -->
+        <div class="panel" id="runPanel">
+          <div class="run-bar">
+            <div class="run-meta">
+              <span class="run-spinner hidden" id="runSpinner" aria-hidden="true"></span>
+              <span class="run-state mono" id="runState">In attesa</span>
+              <span class="run-msg" id="runMsg">Nessuna ricerca avviata</span>
+            </div>
+            <div class="run-count mono" id="runCount">0 match</div>
+            <button class="btn btn-cancel hidden" id="btnCancelSearch">Annulla ricerca</button>
+          </div>
+          <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="log" id="logStream"></div>
+        </div>
+
+      <div class="results-layout" id="resultsLayout">
+
+        <!-- Colonna sinistra: Zona B (dettaglio) sopra, Zona A (lista) sotto -->
+        <div class="results-left">
+          <button class="btn btn-ghost back-to-list" id="btnBackToList">← Torna alla lista</button>
+
+          <div class="detail-panel">
+            <div class="detail-placeholder" id="detailPlaceholder">
+              Seleziona un annuncio a sinistra per vedere dettagli e documenti.
+            </div>
+            <div class="detail-grid hidden" id="detailGrid">
+              <div class="detail-card" id="detailStats"></div>
+              <div class="detail-card" id="detailLetter"></div>
+              <div class="detail-card" id="detailCV"></div>
+              <div class="detail-card" id="detailEmail"></div>
+            </div>
+          </div>
+
+          <div class="panel listing-panel">
+            <div class="panel-head">
+              <h2>Annunci raccolti</h2>
+              <div class="filter-row" id="matchFilters">
+                <button class="pill is-active" data-status="">Tutti</button>
+                <button class="pill" data-status="new">Nuovi</button>
+                <button class="pill" data-status="saved">Salvati</button>
+                <button class="pill" data-status="applied">Inviati</button>
+                <button class="pill" data-status="interview">Colloquio</button>
+              </div>
+            </div>
+            <div id="listingList" class="listing-list"></div>
+          </div>
+        </div>
+
+        <!-- Colonna destra: Zona C (contenuto annuncio) -->
+        <div class="results-right" id="resultsRight">
+          <div class="listing-content-placeholder" id="listingContentPlaceholder">
+            Il testo dell'annuncio selezionato comparirà qui.
+          </div>
+          <div class="listing-content hidden" id="listingContent"></div>
+        </div>
+
+      </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-intelligence">
+      <header class="stage-head">
+        <p class="eyebrow">Passo quattro</p>
+        <h1 class="display">Perché è andata così</h1>
+        <p class="lede">Zero match non significa zero informazioni. Qui c'è cosa ho fatto, cosa ho trovato, e cosa ti blocca.</p>
+      </header>
+      <div id="intelBody"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Barra sticky salvataggio profilo — visibile solo nella view Profilo -->
+<div class="save-bar" id="saveBar">
+  <span class="save-bar-text" id="saveBarText">Nessuna modifica</span>
+  <button class="btn btn-primary" id="btnSaveProfile">Salva profilo</button>
+</div>
+
+<!-- Document viewer -->
+<div class="sheet" id="docSheet">
+  <div class="sheet-panel">
+    <div class="sheet-head">
+      <div>
+        <span class="eyebrow" id="docKind">Documento</span>
+        <h3 id="docTitle">—</h3>
+      </div>
+      <button class="btn btn-micro" id="btnCloseDoc">Chiudi</button>
+    </div>
+    <pre class="sheet-body" id="docBody"></pre>
+    <div class="sheet-foot">
+      <button class="btn btn-ghost" data-fmt="pdf">Scarica PDF</button>
+      <button class="btn btn-ghost" data-fmt="docx">Scarica DOCX</button>
+      <button class="btn btn-ghost" data-fmt="md">Scarica Markdown</button>
+      <button class="btn btn-ghost" id="btnCopyDoc">Copia testo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Revisione CV importato -->
+<div class="sheet" id="cvSheet">
+  <div class="sheet-panel">
+    <div class="sheet-head">
+      <div>
+        <span class="eyebrow">CV importato</span>
+        <h3>Rivedi i dati prima di applicarli</h3>
+      </div>
+      <button class="btn btn-micro" id="btnCloseCv">Chiudi</button>
+    </div>
+    <div class="sheet-body" id="cvReviewBody"></div>
+    <div class="sheet-foot">
+      <button class="btn btn-primary" id="btnApplyCv">Applica selezionati</button>
+      <span class="hint" id="cvApplyHint"></span>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
+

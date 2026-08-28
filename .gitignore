@@ -1,0 +1,16 @@
+﻿__pycache__/
+*.py[cod]
+.pytest_cache/
+*.pytest_cache/
+.venv/
+.env
+.env.local
+*.db
+*.db.*
+backups/
+docs/
+output/*
+!output/.gitkeep
+.DS_Store
+.vscode/
+.claude/
