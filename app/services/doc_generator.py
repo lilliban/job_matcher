@@ -11,7 +11,7 @@ import json
 import logging
 import re
 from pathlib import Path
-
+from docx import Document
 from app.core.config import OUTPUT_DIR
 from app.services.llm_gateway import LLMGateway
 
@@ -156,21 +156,78 @@ class DocumentGenerator:
     async def _generate_cover_letter(
         self, profile: dict, listing: dict, match_info: dict | None
     ) -> str:
-        prompt = (
-            "Scrivi una lettera di presentazione in italiano per questa candidatura.\n\n"
-            "REGOLE:\n"
-            "- Massimo 300 parole.\n"
-            "- Tono professionale ma non ingessato.\n"
-            "- Collega esplicitamente l'esperienza del candidato a ciò che l'annuncio chiede.\n"
-            "- Non inventare esperienze o competenze non presenti nel profilo.\n"
-            "- Niente frasi fatte tipo 'sono una persona dinamica e proattiva'.\n"
-            "- Chiudi con una call to action concreta.\n\n"
-            f"=== PROFILO CANDIDATO ===\n{self._profile_block(profile)}\n"
-            f"{self._base_block(profile, 'cover_letter')}\n"
-            f"=== ANNUNCIO TARGET ===\n{self._listing_block(listing)}\n\n"
-            f"{self._match_hint(match_info)}"
-        )
+        """Genera lettera di presentazione con template."""
+        
+        # 1. Estrai dati
+        # 1. Estrai dati
+        nome = profile.get('name', '')
+        azienda = listing.get('company_name')
+        # Se company_name è vuoto, prova a estrarlo dal titolo
+        if not azienda:
+            title = listing.get('title', '')
+            if ' - ' in title:
+                azienda = title.split(' - ')[-1].strip()
+            elif ' | ' in title:
+                azienda = title.split(' | ')[0].strip()
+            else:
+                azienda = listing.get('source_board', 'l\'azienda')
+        ruolo = listing.get('title', '')
+        
+        # 2. Ricerca informazioni sull'azienda (se disponibile)
+        azienda_info = await self._search_company_info(azienda)
+        
+        # 3. Costruisci il prompt per Gemini
+        prompt = f"""
+        Scrivi una lettera di presentazione professionale in italiano per questa candidatura.
+
+        FORMATO RICHIESTO:
+        - Oggetto: Candidatura per {ruolo} – {nome}
+        - Apertura: Gentile Team di {azienda},
+        - Introduzione: [presentati in 2 righe]
+        - [FRASE_PERSONALE]: Inserisci questa frase ESATTAMENTE come scritta: 
+        "{profile.get('personal_phrase', 'Mi piacerebbe contribuire al vostro team con le mie competenze tecniche e la mia passione per l\'innovazione.')}"
+        - Corpo: Collega le tue esperienze ai requisiti dell'annuncio
+        - Ricerca azienda: {azienda_info}
+        - Chiusura: [call to action]
+        - Firma: {nome}
+
+        DATI CANDIDATO:
+        {self._profile_block(profile)}
+
+        ANNUNCIO:
+        {self._listing_block(listing)}
+
+        REGOLE:
+        1. La frase personale DEVE essere inclusa ESATTAMENTE come scritta
+        2. Massimo 300 parole
+        3. Tono professionale ma non ingessato
+        4. Non inventare esperienze
+        """
+        
         return await self.llm.complete(prompt)
+
+
+    async def _search_company_info(self, company_name: str) -> str:
+        """Cerca informazioni sull'azienda (approccio o valori)."""
+        if not company_name:
+            return ""
+
+        prompt = f"""
+        Cerca informazioni su {company_name}:
+        - Settore
+        - Approccio (es. innovazione, sostenibilità, ecc.)
+        - Valori aziendali principali
+        - Progetti notevoli
+
+        Rispondi in 2-3 frasi in italiano.
+        Se non hai info specifiche, scrivi "L'azienda è attiva nel settore {company_name}."
+        """
+        
+        try:
+            return await self.llm.complete(prompt)
+        except Exception:
+            return f"L'azienda {company_name} è attiva nel settore tecnologico e valuta l'innovazione come valore centrale."
+
 
     async def _generate_email(
         self, profile: dict, listing: dict, match_info: dict | None

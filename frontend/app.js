@@ -40,7 +40,7 @@ async function api(method, path, body) {
     method, 
     headers: { 
       "Content-Type": "application/json",
-      "X-API-Token": "local-dev-token-2026",  // ← AGGIUNGI QUESTA RIGA
+      "X-API-Token": "local-dev-token-2026", 
     } 
   };
   if (body !== undefined) opt.body = JSON.stringify(body);
@@ -252,7 +252,14 @@ $("btnAnalyzeUrl").addEventListener("click", async () => {
         const btn = el("button", "btn btn-ghost", `📄 ${labels[docType] || docType}`);
         btn.style.marginRight = "0.5rem";
         btn.addEventListener("click", () => {
-          currentDoc = { content: content, doc_type: docType };
+          // Genera un ID temporaneo per i documenti da URL
+          const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          currentDoc = { 
+            id: tempId,           
+            content: content, 
+            doc_type: docType,
+            is_temp: true         
+          };
           $("docTitle").textContent = `${labels[docType]} — ${r.listing?.title || "Annuncio"}`;
           $("docBody").textContent = content;
           $("docSheet").classList.add("is-open");
@@ -343,6 +350,7 @@ $("btnSaveProfile").addEventListener("click", async () => {
     location: $("pfLocation").value.trim() || null,
     phone: $("pfPhone").value.trim() || null,
     bio: $("pfBio").value.trim() || null,
+    personal_phrase: $("pfPhrase").value.trim() || null,
   };
   if (!payload.name || !payload.email) {
     toast("Nome ed email sono obbligatori", "bad");
@@ -391,6 +399,7 @@ async function loadUser() {
   $("pfPhone").value = u.phone || "";
   $("pfBio").value = u.bio || "";
   $("railUser").textContent = u.name;
+  $("pfPhrase").value = u.personal_phrase || "";
   unlockProfilePanels();
   await loadAllProfileSections();  
   setSaveBarState("saved");
@@ -1263,15 +1272,6 @@ function renderDraftSkills() {
   });
 }
 
-// ---------- Tabs aziende ----------
-document.querySelectorAll("#companyTabs .tab").forEach(tab => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll("#companyTabs .tab").forEach(t => t.classList.remove("is-active"));
-    tab.classList.add("is-active");
-    document.querySelectorAll(".tab-body").forEach(b => b.classList.toggle("is-visible", b.dataset.body === tab.dataset.tab));
-  });
-});
-
 // ---------- Ricerca aziende (RF2.2) ----------
 $("btnSearchCompany").addEventListener("click", async () => {
   const q = $("coQuery").value.trim();
@@ -1729,24 +1729,66 @@ function renderListingContent(item) {
 // ---------- Sheet documento ----------
 let currentDoc = null;
 function openDoc(doc, m) {
-  currentDoc = doc;
+  // Preserva is_temp se esiste, altrimenti false
+  currentDoc = {
+    ...doc,
+    is_temp: doc.is_temp || false
+  };
   const labels = { cv: "Curriculum", cover_letter: "Lettera di presentazione", email: "Bozza email" };
   $("docKind").textContent = labels[doc.doc_type];
   $("docTitle").textContent = `${m.listing?.company_name} — ${m.listing?.title}`;
   $("docBody").textContent = doc.content;
   $("docSheet").classList.add("is-open");
 }
+
+
 $("btnCloseDoc").addEventListener("click", () => $("docSheet").classList.remove("is-open"));
 $("docSheet").addEventListener("click", (e) => {
   if (e.target.id === "docSheet") $("docSheet").classList.remove("is-open");
 });
 
 document.querySelectorAll(".sheet-foot .btn[data-fmt]").forEach(b => {
-  b.addEventListener("click", () => {
+  b.addEventListener("click", async () => {
     if (!currentDoc) return;
-    window.open(`${API}/documents/${currentDoc.id}/export?fmt=${b.dataset.fmt}`, "_blank");
+    const fmt = b.dataset.fmt;
+    try {
+      // Se è un documento temporaneo (da URL) → scarica il contenuto direttamente
+      if (currentDoc.is_temp) {
+        const content = currentDoc.content;
+        const blob = new Blob([content], { type: 'text/plain' });
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `${currentDoc.doc_type}.${fmt}`;
+        a.click();
+        URL.revokeObjectURL(downloadUrl);
+        toast('Documento scaricato', 'ok');
+        return;
+      }
+
+      // Altrimenti, se è un documento salvato in DB → usa l'API
+      if (currentDoc.id) {
+        const response = await fetch(`${API}/documents/${currentDoc.id}/export?fmt=${fmt}`, {
+          headers: { 'X-API-Token': 'local-dev-token-2026' }
+        });
+        if (!response.ok) throw new Error('Download fallito');
+        const blob = await response.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `documento.${fmt}`;
+        a.click();
+        URL.revokeObjectURL(downloadUrl);
+      } else {
+        throw new Error('Documento senza contenuto');
+      }
+    } catch (e) {
+      toast('Errore download: ' + e.message, 'bad');
+    }
   });
 });
+
+
 $("btnCopyDoc").addEventListener("click", async () => {
   if (!currentDoc) return;
   await navigator.clipboard.writeText(currentDoc.content);

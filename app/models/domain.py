@@ -46,6 +46,7 @@ class User(Base):
     location = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     bio = Column(Text, nullable=True)
+    personal_phrase = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
     soft_skills = relationship("SoftSkill", back_populates="user", cascade="all, delete-orphan")

@@ -335,6 +335,31 @@ class ScraperEngine:
             diag["outcome"] = "fetch_failed"
             return [], diag
 
+        
+        soup = BeautifulSoup(html, "html.parser")
+        title_tag = soup.find("title")
+        page_title = title_tag.get_text(strip=True) if title_tag else ""
+
+        # Se company_name non è stato passato, prova a estrarlo dal titolo
+        if not company_name and page_title:
+            # Lista di separatori comuni nei titoli dei siti di lavoro
+            separators = [" - ", " | ", " · ", " — ", " – "]
+            for sep in separators:
+                if sep in page_title:
+                    parts = page_title.split(sep)
+                    if len(parts) >= 2:
+                        # Il nome azienda è di solito l'ultima parte o la prima
+                        # Prendiamo la parte più corta (di solito è il nome azienda)
+                        if len(parts[0]) < len(parts[-1]):
+                            company_name = parts[0].strip()
+                        else:
+                            company_name = parts[-1].strip()
+                        logger.info(f"Estratto nome azienda dal titolo usando '{sep}': '{company_name}'")
+                        break
+                    
+       
+       
+       
         raw_text = self._strip_html(html, url)
         diag["text_chars"] = len(raw_text)
         if len(raw_text) < 100:
@@ -354,14 +379,13 @@ class ScraperEngine:
             "Il testo contiene link inlineati nel formato \"testo (URL: https://...)\".\n"
             "Per ogni annuncio restituisci un oggetto con queste chiavi esatte:\n"
             '  "title": titolo della posizione\n'
+            '  "company_name": nome dell\'azienda che offre il lavoro (se presente nel testo, altrimenti null)\n'
             '  "location": sede di lavoro (null se assente)\n'
             '  "contract_type": tipo contratto (null se assente)\n'
             '  "requirements_raw": requisiti e competenze richieste, testo integrale\n'
             '  "description": breve descrizione del ruolo\n'
             '  "posted_date": data pubblicazione (null se assente)\n'
-            '  "url": il link diretto a QUESTO specifico annuncio, cercandolo tra i '
-            '"(URL: ...)" più vicini al titolo — copialo esattamente come appare nel '
-            'testo, non modificarlo. null se non trovi un link plausibile per questo annuncio.\n\n'
+            '  "url": il link diretto a QUESTO specifico annuncio...\n\n'
             "Rispondi SOLO con un array JSON. Se non trovi annunci rispondi [].\n"
             "Non inventare annunci che non sono nel testo. Non inventare URL: usa SOLO "
             "un URL copiato letteralmente dal testo fornito.\n\n"
@@ -385,7 +409,21 @@ class ScraperEngine:
             # ripiega sull'URL della pagina intera (comportamento precedente)
             if not (isinstance(item_url, str) and item_url.strip() and item_url in page_text):
                 item_url = url
-            item["company_name"] = company_name
+            # Usa company_name dall'LLM se disponibile, altrimenti quello dal titolo
+            llm_company = item.get("company_name")
+            if llm_company:
+                item["company_name"] = llm_company
+            elif company_name:
+                item["company_name"] = company_name
+            else:
+                # Fallback: se il titolo dell'annuncio contiene "presso X" o "@ X"
+                title = item.get("title", "")
+                if " presso " in title:
+                    item["company_name"] = title.split(" presso ")[-1].strip()
+                elif " @ " in title:
+                    item["company_name"] = title.split(" @ ")[-1].strip()
+                else:
+                    item["company_name"] = "N/D"
             item["source_url"] = item_url
             item["source_board"] = source_board
             out.append(item)

@@ -16,7 +16,7 @@ class UserBase(BaseModel):
     location: Optional[str] = None
     phone: Optional[str] = None
     bio: Optional[str] = None
-
+    personal_phrase: Optional[str] = None 
 
 class UserCreate(UserBase):
     pass
@@ -27,6 +27,7 @@ class UserUpdate(BaseModel):
     location: Optional[str] = None
     phone: Optional[str] = None
     bio: Optional[str] = None
+    personal_phrase: Optional[str] = None 
     years_experience_total: Optional[int] = None
     work_mode_pref: Optional[str] = None
     contract_type_pref: Optional[str] = None
@@ -434,6 +435,7 @@ class CVExtractedProfile(BaseModel):
     phone: Optional[str] = None
     location: Optional[str] = None
     bio: Optional[str] = None
+    personal_phrase: Optional[str] = None 
     hard_skills: list[str] = []
     soft_skills: list[str] = []
     languages: list[dict] = []
