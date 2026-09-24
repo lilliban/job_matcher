@@ -37,7 +37,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -115,11 +115,37 @@ app.include_router(collections.router)
 
 
 # ---------------------------------------------------------------------
-# Frontend statico
+# Frontend statico (SPA React + Vite build)
+#
+# In produzione FastAPI serve la build compilata:
+#   - /assets/*  → chunk JS/CSS emessi da Vite (nomi con hash)
+#   - /          → index.html (bootstrap React)
+#   - /profile, /sessions, ... → sempre index.html (React Router gestisce
+#     il routing client-side dopo il caricamento)
+#
+# In dev l'autrice avvia due processi:
+#   1. python run.py  (backend su :8000)
+#   2. npm --prefix frontend run dev  (Vite su :5173 con proxy /api → :8000)
 # ---------------------------------------------------------------------
 if FRONTEND_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+    assets_dir = FRONTEND_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     @app.get("/", include_in_schema=False)
     def serve_index():
         return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_spa(full_path: str):
+        # Se il path esiste come file statico (es. vite.svg) servilo,
+        # altrimenti restituisci index.html per il routing client-side.
+        candidate = FRONTEND_DIR / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(FRONTEND_DIR / "index.html"))
+else:
+    logger.warning(
+        "Build frontend non trovata in %s. Esegui: cd frontend && npm run build",
+        FRONTEND_DIR,
+    )

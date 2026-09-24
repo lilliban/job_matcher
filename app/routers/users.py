@@ -129,6 +129,18 @@ def delete_user(user_id: str, db: Session = Depends(get_db)):
 @router.post("/{user_id}/languages", response_model=schemas.UserLanguageOut, status_code=201)
 def add_language(user_id: str, payload: schemas.UserLanguageCreate, db: Session = Depends(get_db)):
     get_user_or_404(db, user_id)
+    # dedup case-insensitive per lingua (stesso pattern di add_hard_skill):
+    # ricaricare lo stesso CV non deve duplicare le lingue già presenti nel profilo
+    existing = (
+        db.query(models.UserLanguage)
+        .filter(
+            models.UserLanguage.user_id == user_id,
+            models.UserLanguage.language.ilike(payload.language),
+        )
+        .first()
+    )
+    if existing:
+        return existing
     lang = models.UserLanguage(user_id=user_id, **payload.model_dump())
     db.add(lang)
     db.commit()

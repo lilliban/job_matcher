@@ -5,6 +5,7 @@ python-multipart==0.0.20
 
 # --- Database ---
 sqlalchemy==2.0.36
+psycopg[binary]==3.2.3  # driver PostgreSQL (opzionale: serve solo se DATABASE_URL punta a postgresql://)
 
 # --- Schemas / config ---
 pydantic==2.10.4

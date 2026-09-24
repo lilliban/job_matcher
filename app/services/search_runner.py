@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 from app.core.config import POLL_INTERVAL_SECONDS
 from app.database import SessionLocal
 from app.models import (
-    GeneratedDocument,
     JobListing,
     Match,
     SearchLog,
@@ -37,7 +36,6 @@ from app.models import (
 )
 from app.services import company_source
 from app.services.company_discovery import CompanyDiscoveryEngine
-from app.services.doc_generator import DocumentGenerator
 from app.services.llm_gateway import LLMGateway
 from app.services.matcher import MatchingEngine
 from app.services.scraper import ScraperEngine
@@ -165,7 +163,6 @@ async def run_search(session_id: str) -> None:
         llm = LLMGateway(db=db)
         scraper = ScraperEngine(llm)
         matcher = MatchingEngine(llm, user_profile=user_profile)  # ← Ora user_profile esiste
-        doc_gen = DocumentGenerator(llm)
         discovery = CompanyDiscoveryEngine(llm)
 
         # 3. Poi il resto...
@@ -232,7 +229,7 @@ async def run_search(session_id: str) -> None:
 
             await _process_listings(
                 db, session, listings, user_skill_names, required_skills,
-                user_profile, matcher, doc_gen,
+                user_profile, matcher,
             )
 
         # =============================================================
@@ -267,7 +264,7 @@ async def run_search(session_id: str) -> None:
 
         await _process_listings(
             db, session, board_listings, user_skill_names, required_skills,
-            user_profile, matcher, doc_gen,
+            user_profile, matcher,
         )
 
         # =============================================================
@@ -318,10 +315,11 @@ async def _process_listings(
     required_skills: list[str],
     user_profile: dict,
     matcher: MatchingEngine,
-    doc_gen: DocumentGenerator,
 ) -> None:
-    """Per ogni annuncio: dedup → salva → match → se sopra soglia genera documenti.
-    Commit dopo ogni annuncio (nessuna transazione gigante)."""
+    """Per ogni annuncio: dedup → salva → match se sopra soglia.
+    Commit dopo ogni annuncio (nessuna transazione gigante). I documenti
+    (CV/lettera/email) non si generano qui: sono su richiesta, vedi
+    POST /api/documents/regenerate/{match_id}."""
     for item in listings:
         try:
             title = (item.get("title") or "").strip()
@@ -432,22 +430,11 @@ async def _process_listings(
             _log(db, session.id, company_name, "match_found",
                  f"{title} — score {result['score']:.0%}")
 
-            # RF5 — genera i documenti per questo match
-            for doc_type in ("cv", "cover_letter", "email"):
-                try:
-                    content = await doc_gen.generate(
-                        doc_type, user_profile, listing_dict, result
-                    )
-                    db.add(GeneratedDocument(
-                        match_id=match.id,
-                        doc_type=doc_type,
-                        content=content,
-                        llm_model=doc_gen.llm.last_model_used,
-                    ))
-                    _commit_with_logging(db, context=f"_process_listings: salvataggio {doc_type}")
-                except Exception as exc:
-                    logger.warning("Generazione %s fallita: %s", doc_type, exc)
-                    db.rollback()
+            # RF5 — i documenti (CV/lettera/email) NON si generano più qui
+            # in automatico: costano quota LLM per ogni match, anche quando
+            # l'utente non li scarica mai. Si generano su richiesta da
+            # POST /api/documents/regenerate/{match_id} (pulsante "Genera"
+            # nella UI del match).
 
         except Exception as exc:
             logger.warning("Annuncio scartato per errore: %s", exc)

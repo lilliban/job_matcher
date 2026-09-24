@@ -6,12 +6,12 @@ hard skill tipiche di quel ruolo. L'utente spunta quelle che ha.
 """
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.core.security import verify_token
 from app import schemas
 from app.database import get_db
-from app.services.llm_gateway import LLMGateway
+from app.services.llm_gateway import LLMGateway, LLMGatewayError
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,10 @@ async def similar_soft_skills(
         'Rispondi SOLO con un array JSON di oggetti: '
         '[{"name": "...", "category": "...", "importance": "..."}]'
     )
-    data = await llm.complete_json(prompt, default=[])
+    try:
+        data = await llm.complete_json(prompt, default=[])
+    except LLMGatewayError as exc:
+        raise HTTPException(503, str(exc)) from exc
 
     if not isinstance(data, list) or not data:
         return []
@@ -90,7 +93,10 @@ async def suggest_skills_for_role(
         'Rispondi SOLO con un array JSON: '
         '[{"name": "...", "category": "...", "importance": "essential|important|nice_to_have"}]'
     )
-    data = await llm.complete_json(prompt, default=[])
+    try:
+        data = await llm.complete_json(prompt, default=[])
+    except LLMGatewayError as exc:
+        raise HTTPException(503, str(exc)) from exc
 
     if not isinstance(data, list) or not data:
         return []

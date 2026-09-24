@@ -14,6 +14,7 @@ fondarci sopra una decisione automatica.
 """
 import json
 import re
+import unicodedata
 
 # ---------------------------------------------------------------------
 # Tipo di contratto
@@ -234,6 +235,24 @@ def salary(*sources: str | None) -> tuple[int | None, int | None, str | None]:
             if 5_000 <= lo <= hi <= 1_000_000:
                 return lo, hi, cur
     return None, None, None
+
+
+# ---------------------------------------------------------------------
+# Slug — nomi di file/cartelle sicuri (export documenti)
+# ---------------------------------------------------------------------
+def slug(value: str | None, *, max_len: int = 60) -> str:
+    """ASCII snake_case: minuscolo, accenti rimossi, tutto il resto -> '_'.
+
+    Usata per nomi di file e cartelle (export documenti): deve produrre
+    sempre lo stesso risultato per lo stesso input, sia quando si scrive
+    il file (doc_generator) sia quando lo si ritrova per cancellarlo
+    (document_cleanup) — i due punti non devono poter divergere."""
+    if not value:
+        return ""
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", "_", ascii_only).strip("_").lower()
+    return cleaned[:max_len].strip("_")
 
 
 # ---------------------------------------------------------------------

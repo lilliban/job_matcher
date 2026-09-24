@@ -18,7 +18,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Mapper
 
 from app.core.config import OUTPUT_DIR
-from app.models import GeneratedDocument, JobListing, Match
+from app.models import GeneratedDocument, JobListing, Match, SearchSession, User
 from app.services.doc_generator import DocumentGenerator
 
 logger = logging.getLogger(__name__)
@@ -32,18 +32,24 @@ def _cleanup_exported_files(
     perché siamo dentro un evento di flush."""
     try:
         row = connection.execute(
-            select(JobListing.company_name, JobListing.title)
+            select(
+                JobListing.company_name, JobListing.title,
+                User.name.label("candidate_name"),
+            )
             .select_from(Match)
             .join(JobListing, JobListing.id == Match.listing_id)
+            .join(SearchSession, SearchSession.id == Match.session_id)
+            .join(User, User.id == SearchSession.user_id)
             .where(Match.id == target.match_id)
         ).first()
         if row is None:
             return  # match o annuncio già andati — niente stem da ricostruire
 
         stem = DocumentGenerator.output_stem(
-            target.doc_type, row.company_name, row.title, target.id
+            target.doc_type, row.candidate_name, row.title, target.id
         )
-        for path in OUTPUT_DIR.glob(f"{stem}.*"):
+        target_dir = OUTPUT_DIR / DocumentGenerator.company_dir(row.company_name)
+        for path in target_dir.glob(f"{stem}.*"):
             try:
                 path.unlink()
                 logger.info("File orfano rimosso: %s", path.name)

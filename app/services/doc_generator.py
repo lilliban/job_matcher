@@ -13,9 +13,17 @@ import re
 from pathlib import Path
 from docx import Document
 from app.core.config import OUTPUT_DIR
+from app.services import normalize
 from app.services.llm_gateway import LLMGateway
 
 logger = logging.getLogger(__name__)
+
+# Etichette leggibili per il filename — non i nomi tecnici doc_type.
+_DOC_TYPE_LABEL = {
+    "cv": "cv",
+    "cover_letter": "lettera_presentazione",
+    "email": "email",
+}
 
 
 class DocumentGenerator:
@@ -250,51 +258,66 @@ class DocumentGenerator:
     # RF5.4 — export
     # -----------------------------------------------------------------
     @staticmethod
-    def output_stem(doc_type: str, company_name: str | None, title: str | None, doc_id: str) -> str:
+    def company_dir(company_name: str | None) -> str:
+        """Nome della sottocartella di output/ per un'azienda — ogni
+        documento esportato finisce dentro output/<company_dir>/ invece
+        che piatto in output/."""
+        return normalize.slug(company_name) or "azienda_sconosciuta"
+
+    @staticmethod
+    def output_stem(doc_type: str, candidate_name: str | None, title: str | None, doc_id: str) -> str:
         """Nome file deterministico condiviso da tutti i formati esportati
         di un documento (pdf/docx/md/txt). Ricalcolabile da chi deve
         ritrovare i file su disco (es. cleanup) senza salvare il path in DB.
 
+        L'azienda non compare più qui: è la cartella (vedi company_dir).
+        Il nome file diventa <candidato>_<tipo>_<titolo annuncio>.
+
         Gli ultimi 8 caratteri di `doc_id` (suffisso di unicità) non vengono
         MAI troncati: si accorcia prima la parte descrittiva, poi si
-        appende sempre l'id per intero (71 + 1 + 8 = 80 caratteri max)."""
+        appende sempre l'id per intero. Serve perché due annunci diversi
+        della stessa azienda possono avere lo stesso titolo — senza questo
+        suffisso si sovrascriverebbero a vicenda."""
         id_suffix = re.sub(r"[^A-Za-z0-9_\-]", "_", doc_id[:8])
-        descriptive = "_".join(p for p in (doc_type, company_name, title) if p)
-        descriptive = re.sub(r"[^A-Za-z0-9_\-]", "_", descriptive)[:71]
+        label = _DOC_TYPE_LABEL.get(doc_type, doc_type)
+        parts = [normalize.slug(candidate_name), label, normalize.slug(title)]
+        descriptive = "_".join(p for p in parts if p)[:71]
         return f"{descriptive}_{id_suffix}" if descriptive else id_suffix
 
     @staticmethod
-    def export(content: str, fmt: str, filename_stem: str) -> Path:
-        """Esporta il documento nel formato richiesto e ritorna il path."""
-        OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
+    def export(content: str, fmt: str, company_name: str | None, filename_stem: str) -> Path:
+        """Esporta il documento nel formato richiesto dentro
+        output/<company_dir>/ e ritorna il path."""
+        target_dir = OUTPUT_DIR / DocumentGenerator.company_dir(company_name)
+        target_dir.mkdir(exist_ok=True, parents=True)
 
         if fmt == "md":
-            path = OUTPUT_DIR / f"{filename_stem}.md"
+            path = target_dir / f"{filename_stem}.md"
             path.write_text(content, encoding="utf-8")
             return path
 
         if fmt == "txt":
-            path = OUTPUT_DIR / f"{filename_stem}.txt"
+            path = target_dir / f"{filename_stem}.txt"
             path.write_text(content, encoding="utf-8")
             return path
 
         if fmt == "pdf":
-            return DocumentGenerator._export_pdf(content, filename_stem)
+            return DocumentGenerator._export_pdf(content, target_dir, filename_stem)
 
         if fmt == "docx":
-            return DocumentGenerator._export_docx(content, filename_stem)
+            return DocumentGenerator._export_docx(content, target_dir, filename_stem)
 
         raise ValueError(f"Formato non supportato: {fmt}")
 
     @staticmethod
-    def _export_pdf(content: str, stem: str) -> Path:
+    def _export_pdf(content: str, target_dir: Path, stem: str) -> Path:
         from reportlab.lib.enums import TA_LEFT
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import mm
         from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
-        path = OUTPUT_DIR / f"{stem}.pdf"
+        path = target_dir / f"{stem}.pdf"
         doc = SimpleDocTemplate(
             str(path),
             pagesize=A4,
@@ -333,11 +356,11 @@ class DocumentGenerator:
         return path
 
     @staticmethod
-    def _export_docx(content: str, stem: str) -> Path:
+    def _export_docx(content: str, target_dir: Path, stem: str) -> Path:
         from docx import Document
         from docx.shared import Pt
 
-        path = OUTPUT_DIR / f"{stem}.docx"
+        path = target_dir / f"{stem}.docx"
         d = Document()
         style = d.styles["Normal"]
         style.font.name = "Calibri"

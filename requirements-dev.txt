@@ -1,0 +1,14 @@
+# Dipendenze di sviluppo — NON necessarie in produzione.
+# Installa con: pip install -r requirements-dev.txt
+
+# --- Test framework ---
+pytest==8.3.4
+pytest-asyncio==0.25.0
+
+# --- Linter & formatter ---
+ruff==0.8.4
+black==24.10.0
+
+# --- End-to-end browser testing ---
+playwright==1.49.1
+pytest-playwright==0.6.2

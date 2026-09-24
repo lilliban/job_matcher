@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: job_matcher_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: job_matcher
+      POSTGRES_PASSWORD: job_matcher
+      POSTGRES_DB: job_matcher
+    ports:
+      - "5432:5432"
+    volumes:
+      - job_matcher_pg_data:/var/lib/postgresql/data
+
+volumes:
+  job_matcher_pg_data:

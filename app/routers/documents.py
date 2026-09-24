@@ -52,15 +52,18 @@ def export_document(
 
     match = doc.match
     listing = match.listing if match else None
+    candidate_name = match.session.user.name if match else ""
     stem = DocumentGenerator.output_stem(
         doc.doc_type,
-        listing.company_name if listing else "",
+        candidate_name,
         listing.title if listing else "",
         doc.id,
     )
 
     try:
-        path = DocumentGenerator.export(doc.content, fmt, stem)
+        path = DocumentGenerator.export(
+            doc.content, fmt, listing.company_name if listing else None, stem
+        )
     except ImportError as exc:
         raise HTTPException(
             500,

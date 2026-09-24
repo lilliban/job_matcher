@@ -1,0 +1,43 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "output", "frontend", "Claude"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # line too long — gestito da black
+    "B008",  # do not perform function calls in argument defaults — pattern comune in FastAPI (Depends())
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # module-level import not at top of file — tests possono modificare sys.path
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+extend-exclude = '''
+/(
+    \.venv
+  | output
+  | frontend
+  | Claude
+)/
+'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "integration: test che richiedono servizi esterni (DB persistente, LLM, browser)",
+    "e2e: end-to-end test con browser reale (Playwright)",
+    "slow: test lenti (> 5s)",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
