@@ -24,6 +24,49 @@ logger = logging.getLogger(__name__)
 # se il keyword score è sotto questa soglia non chiamiamo neanche l'LLM
 PREFILTER_MIN = 0.0
 
+JUNIOR_KEYWORDS = [
+    "junior", "stage", "stagista", "internship", "trainee",
+    "apprendistato", "entry level", "graduate", "werkstudent", "working student",
+    "intern", "praktikum", "praktikant", "tirocinio", "tirocinante", "student",
+    "praktikantin", "werkstudentin", "internships", "stagiaire", "praktika",
+]
+SENIOR_KEYWORDS = ["senior", "lead", "principal", "head of", "manager", "director", "architect"]
+
+
+def _keyword_re(keywords: list[str]) -> re.Pattern:
+    sorted_kws = sorted(keywords, key=len, reverse=True)
+    pattern = "|".join(re.escape(kw) for kw in sorted_kws)
+    return re.compile(rf"\b(?:{pattern})\b", re.IGNORECASE)
+
+
+_JUNIOR_RE = _keyword_re(JUNIOR_KEYWORDS)
+_SENIOR_RE = _keyword_re(SENIOR_KEYWORDS)
+
+
+def normalize_semantic_score(score: float) -> float:
+    if score > 1:
+        score = score / 100
+    return max(0.0, min(1.0, score))
+
+
+def seniority_check(title: str, text: str) -> tuple[bool, str]:
+    """Ritorna (is_incompatible, motivo) in base al livello di seniority."""
+    title_norm = (title or "").lower()
+
+    if _JUNIOR_RE.search(title_norm):
+        return False, ""
+
+    m = _SENIOR_RE.search(title_norm)
+    if m:
+        return True, f"titolo richiede livello senior+ ({m.group()})"
+
+    years_pattern = re.findall(r'(\d+)\s*\+?\s*(?:years|anni|jahre|ans)', (text or "").lower())
+    for y in years_pattern:
+        if int(y) > 2:
+            return True, f"richiede {y}+ anni di esperienza"
+
+    return False, ""
+
 SKILL_SYNONYMS = {
     "python": ["python", "py"],
     "machine learning": ["machine learning", "ml", "ai"],
@@ -47,7 +90,10 @@ class MatchingEngine:
     def __init__(self, llm: LLMGateway, user_profile: dict | None = None):
         self.llm = llm
         self.user_profile = user_profile or {}
-        self.user_skills = [s["name"].lower() for s in self.user_profile.get("hard_skills", [])]
+        self.user_skills = [
+            n for s in self.user_profile.get("hard_skills", [])
+            if (n := s.get("name", "").lower())
+        ]
         self.user_languages = self.user_profile.get("languages", [])
         self.user_years_exp = self.user_profile.get("years_experience_total", 0)
         self.work_mode_pref = self.user_profile.get("work_mode_pref")
@@ -67,12 +113,12 @@ class MatchingEngine:
                 if f"fluent {lang_name}" in requirements or f"fluently {lang_name}" in requirements:
                     return True, f"richiede {lang_name} fluente (tu hai {lang_level})"
         
-        # 2. Controlla anni esperienza
-        years_pattern = re.findall(r'(\d+)\s*\+?\s*(?:years|anni|jahre|ans)', requirements)
-        for y in years_pattern:
-            if int(y) > self.user_years_exp + 2:  # tolleranza 2 anni
-                return True, f"richiede {y}+ anni di esperienza (tu hai {self.user_years_exp})"
-        
+        # 2. Controlla seniority
+        title = listing.get("title", "")
+        is_senior, reason = seniority_check(title, requirements)
+        if is_senior:
+            return True, reason
+
         # 3. Controlla work mode
         if self.work_mode_pref == "remote":
             if "on-site" in requirements or "onsite" in requirements:
@@ -81,9 +127,6 @@ class MatchingEngine:
         return False, ""
 
     # -----------------------------------------------------------------
-    
-    # app/services/matcher.py - dentro la classe MatchingEngine
-
     def compute_keyword_score(
         self, user_skills: Iterable[str], requirements_raw: str
     ) -> tuple[float, list[str], list[str]]:
@@ -221,7 +264,9 @@ class MatchingEngine:
             
             # SOFT SKILLS
             if user_profile.get("soft_skills"):
-                profile_lines.append(f"\nSOFT SKILLS: {', '.join(user_profile['soft_skills'])}")
+                profile_lines.append(
+                    f"\nSOFT SKILLS: {', '.join(s['name'] if isinstance(s, dict) else s for s in user_profile['soft_skills'])}"
+                )
             
             # LINGUE
             if user_profile.get("languages"):
@@ -318,7 +363,7 @@ class MatchingEngine:
             score = 0.0
 
         return {
-            "score": max(0.0, min(1.0, score)),
+            "score": normalize_semantic_score(score),
             "matched_skills": data.get("matched_skills") if isinstance(data.get("matched_skills"), list) else [],
             "missing_skills": data.get("missing_skills") if isinstance(data.get("missing_skills"), list) else [],
             "gap_analysis": data.get("gap_analysis"),
