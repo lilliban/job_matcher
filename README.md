@@ -80,6 +80,15 @@ Lascia GEMINI_API_KEY vuoto in .env.
 python run.py
 Apri il browser su http://localhost:8000
 
+L'interfaccia è una SPA React: la prima volta (e dopo ogni modifica al frontend) va compilata:
+
+cd frontend
+npm install
+npm run build
+
+Per sviluppare l'interfaccia con ricarica automatica: `npm run dev` (http://localhost:5173, con il backend già avviato).
+La vecchia interfaccia vanilla JS resta disponibile su http://localhost:8000/legacy.
+
 ## Struttura del progetto
 
 ```text
@@ -115,10 +124,9 @@ job_matcher/
 │   ├── database.py             # SQLite + SQLAlchemy
 │   └── main.py                 # Entry point FastAPI
 ├── frontend/
-│   ├── index.html
-│   ├── style.css
-│   ├── roles.js                # Catalogo ruoli statico per autocomplete
-│   └── app.js                  # SPA vanilla JavaScript
+│   ├── index.html              # Entry point Vite
+│   ├── src/                    # SPA React (viste, componenti, API client)
+│   └── legacy/                 # Vecchia SPA vanilla JS (/legacy)
 ├── output/                     # Cartella documenti esportati (PDF/DOCX/MD/TXT)
 ├── scripts/
 │   ├── migrate.py              # Migrazioni database
