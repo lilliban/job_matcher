@@ -359,3 +359,35 @@ def _stamp(db: Session, profile: CompanyProfile, ok: bool) -> None:
 def is_fresh(profile: CompanyProfile) -> bool:
     """Esposta perché search_runner decida se saltare del tutto l'azienda."""
     return _fresh(profile)
+
+
+def archived_postings_for_roles(
+    db: Session, roles: list[str], country_code: str | None = None, limit: int = 150
+) -> list[dict]:
+    """Annunci già in archivio (di QUALUNQUE azienda) attinenti ai ruoli.
+
+    È la fonte "mercato" che non costa richieste di rete: l'archivio è
+    cresciuto con le ricerche precedenti. Con `country_code` si tengono
+    anche gli annunci senza paese noto — meglio un falso positivo che il
+    matcher scarta che un annuncio buono perso per un campo vuoto."""
+    from sqlalchemy import or_
+
+    q = db.query(JobPosting).filter(JobPosting.is_closed.is_(False))
+    if country_code:
+        q = q.filter(
+            or_(JobPosting.country_code == country_code, JobPosting.country_code.is_(None))
+        )
+    rows = q.order_by(JobPosting.first_seen_at.desc()).limit(2000).all()
+    items = [posting_to_item(p) for p in rows]
+    if not roles:
+        return items[:limit]
+
+    kept: list[dict] = []
+    seen: set[str] = set()
+    for role in roles:
+        for it in filter_by_role(items, role):
+            key = f"{it['company_name']}|{it['title']}".lower()
+            if key not in seen:
+                seen.add(key)
+                kept.append(it)
+    return kept[:limit]

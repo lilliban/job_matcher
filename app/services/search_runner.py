@@ -35,7 +35,7 @@ from app.models import (
     SearchSession,
     TargetCompany,
 )
-from app.services import company_source
+from app.services import career_advisor, company_source, geo
 from app.services.company_discovery import CompanyDiscoveryEngine
 from app.services.doc_generator import DocumentGenerator
 from app.services.llm_gateway import LLMGateway
@@ -168,15 +168,42 @@ async def run_search(session_id: str) -> None:
         doc_gen = DocumentGenerator(llm)
         discovery = CompanyDiscoveryEngine(llm)
 
+        # Modalità: dove si cerca (aziende scelte / mercato) e per quale
+        # ruolo. Il ruolo può mancare: allora si cerca ciò che il profilo
+        # sa fare, deducendo i ruoli dal profilo stesso.
+        mode = session.search_mode or "both"
+        use_companies = mode in ("companies", "both")
+        use_market = mode in ("market", "both")
+        role = (session.role_title or "").strip()
+        if role:
+            board_roles = [role]
+        elif use_market:
+            inferred = await career_advisor.suggest_roles(llm, session.user, limit=3)
+            board_roles = [r["role"] for r in inferred]
+        else:
+            board_roles = []
+        role_label = role or (
+            "qualsiasi ruolo adatto al profilo"
+            + (f" ({', '.join(board_roles)})" if board_roles else "")
+        )
+        country_code = session.geo_country or (
+            session.preferred_country
+            if session.preferred_country and not geo.is_continent(session.preferred_country)
+            else None
+        )
+
         # 3. Poi il resto...
         _log(db, session_id, "system", "start",
-             f"Ricerca avviata per il ruolo: {session.role_title}")
+             f"Ricerca avviata: {role_label} · modalità {mode}")
 
         # =============================================================
         # FASE 1 — verifica aziende target e trova le careers page
         # =============================================================
-        companies = [c for c in session.companies if c.exists_online]
-        total_steps = len(companies) + 1  # +1 per la fase job board
+        companies = (
+            [c for c in session.companies if c.exists_online] if use_companies else []
+        )
+        # un passo per azienda, uno per ogni ruolo sui portali, uno per l'archivio
+        total_steps = len(companies) + (len(board_roles) + 1 if use_market else 0)
         step = 0
 
         for company in companies:
@@ -199,7 +226,7 @@ async def run_search(session_id: str) -> None:
                 cached = company_source.cached_postings_for(db, company.name)
                 if cached:
                     listings = [company_source.posting_to_item(p) for p in cached]
-                    listings = company_source.filter_by_role(listings, session.role_title)
+                    listings = company_source.filter_by_role(listings, role)
                     _clog("cache",
                           f"{len(listings)} annunci riusati dall'archivio, "
                           f"nessuna richiesta di rete")
@@ -210,7 +237,7 @@ async def run_search(session_id: str) -> None:
             else:
                 listings, outcome, seen_in_feed = await company_source.collect_for_company(
                     db, company, profile, scraper, _clog,
-                    role_title=session.role_title,
+                    role_title=role,
                 )
 
             company.last_searched_at = datetime.now(timezone.utc)
@@ -236,14 +263,8 @@ async def run_search(session_id: str) -> None:
             )
 
         # =============================================================
-        # FASE 2 — job board a rotazione (RF3.1a)
+        # FASE 2 — mercato: job board a rotazione (RF3.1a) + archivio
         # =============================================================
-        step += 1
-        _progress(db, session, step, total_steps,
-                  "Cerco sui portali di lavoro...")
-        _log(db, session_id, "job_boards", "search",
-             f"Interrogo i portali per '{session.role_title}'")
-
         def _log_board(board_name: str, diag: dict) -> None:
             """Un board che risponde 403 e uno che risponde 200 con una
             shell JavaScript vuota sono entrambi "0 annunci" nel log
@@ -258,17 +279,36 @@ async def run_search(session_id: str) -> None:
             level = "info" if diag.get("listings") else "warning"
             _log(db, session_id, board_name, "board_result", detail, level=level)
 
-        board_listings = await scraper.search_job_boards(
-            session.role_title, session.location_pref, session.preferred_country,
-            on_board_result=_log_board,
-        )
-        _log(db, session_id, "job_boards", "search",
-             f"{len(board_listings)} annunci raccolti dai portali")
+        if use_market:
+            for board_role in board_roles:
+                step += 1
+                _progress(db, session, step, total_steps,
+                          f"Cerco '{board_role}' sui portali di lavoro...")
+                _log(db, session_id, "job_boards", "search",
+                     f"Interrogo i portali per '{board_role}'")
+                board_listings = await scraper.search_job_boards(
+                    board_role, session.location_pref, session.preferred_country,
+                    on_board_result=_log_board,
+                )
+                _log(db, session_id, "job_boards", "search",
+                     f"{len(board_listings)} annunci raccolti dai portali")
+                await _process_listings(
+                    db, session, board_listings, user_skill_names, required_skills,
+                    user_profile, matcher, doc_gen,
+                )
 
-        await _process_listings(
-            db, session, board_listings, user_skill_names, required_skills,
-            user_profile, matcher, doc_gen,
-        )
+            step += 1
+            _progress(db, session, step, total_steps,
+                      "Controllo gli annunci già in archivio...")
+            archived = company_source.archived_postings_for_roles(
+                db, board_roles, country_code
+            )
+            _log(db, session_id, "archivio", "search",
+                 f"{len(archived)} annunci in archivio attinenti, nessuna richiesta di rete")
+            await _process_listings(
+                db, session, archived, user_skill_names, required_skills,
+                user_profile, matcher, doc_gen,
+            )
 
         # =============================================================
         # Chiusura
@@ -389,7 +429,7 @@ async def _process_listings(
             # FILTRO 2: Seniority (stage/junior vs senior)
             # =========================================
             title_lower = title.lower()
-            role_lower = session.role_title.lower()
+            role_lower = (session.role_title or "").lower()
             
             if any(word in role_lower for word in ["stage", "junior", "intern", "tirocinio"]):
                 if any(word in title_lower for word in ["senior", "lead", "manager", "director", "head"]):

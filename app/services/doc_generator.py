@@ -29,11 +29,14 @@ class DocumentGenerator:
         user_profile: dict,
         listing: dict,
         match_info: dict | None = None,
+        guidelines: str = "",
     ) -> str:
         if doc_type == "cv":
-            return await self._generate_cv(user_profile, listing, match_info)
+            return await self._generate_cv(user_profile, listing, match_info, guidelines)
         if doc_type == "cover_letter":
-            return await self._generate_cover_letter(user_profile, listing, match_info)
+            return await self._generate_cover_letter(
+                user_profile, listing, match_info, guidelines
+            )
         if doc_type == "email":
             return await self._generate_email(user_profile, listing, match_info)
         raise ValueError(f"doc_type non supportato: {doc_type}")
@@ -111,6 +114,22 @@ class DocumentGenerator:
         )
 
     @staticmethod
+    def _guidelines_block(guidelines: str) -> str:
+        """Linee guida/schema dell'utente (testo o file). Hanno la
+        precedenza sulla struttura predefinita dei prompt, ma NON sulla
+        regola di veridicità: lo schema decide la forma, non i fatti."""
+        if not guidelines.strip():
+            return ""
+        return (
+            "\n=== LINEE GUIDA E SCHEMA DELL'UTENTE ===\n"
+            "Segui queste indicazioni per struttura, sezioni, tono, lunghezza "
+            "e formato. Dove contraddicono la struttura predefinita indicata "
+            "sopra, hanno la precedenza. Restano valide le regole di "
+            "veridicità: usa solo informazioni del profilo.\n\n"
+            f"{guidelines[:8000]}\n"
+        )
+
+    @staticmethod
     def _match_hint(match_info: dict | None) -> str:
         if not match_info:
             return ""
@@ -132,7 +151,8 @@ class DocumentGenerator:
 
     # -----------------------------------------------------------------
     async def _generate_cv(
-        self, profile: dict, listing: dict, match_info: dict | None
+        self, profile: dict, listing: dict, match_info: dict | None,
+        guidelines: str = "",
     ) -> str:
         prompt = (
             "Scrivi un CV professionale in italiano, in formato Markdown, "
@@ -150,11 +170,13 @@ class DocumentGenerator:
             f"{self._base_block(profile, 'cv')}\n"
             f"=== ANNUNCIO TARGET ===\n{self._listing_block(listing)}\n\n"
             f"{self._match_hint(match_info)}"
+            f"{self._guidelines_block(guidelines)}"
         )
         return await self.llm.complete(prompt)
 
     async def _generate_cover_letter(
-        self, profile: dict, listing: dict, match_info: dict | None
+        self, profile: dict, listing: dict, match_info: dict | None,
+        guidelines: str = "",
     ) -> str:
         """Genera lettera di presentazione con template."""
         
@@ -202,6 +224,7 @@ class DocumentGenerator:
         2. Massimo 300 parole
         3. Tono professionale ma non ingessato
         4. Non inventare esperienze
+        {self._guidelines_block(guidelines)}
         """
         
         return await self.llm.complete(prompt)

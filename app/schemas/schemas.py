@@ -2,7 +2,7 @@
 Schemi Pydantic — validazione request/response.
 """
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -136,7 +136,8 @@ class EducationOut(EducationCreate):
 # Session
 # =====================================================================
 class SearchSessionCreate(BaseModel):
-    role_title: str
+    role_title: str = ""  # vuoto = qualunque ruolo adatto al profilo
+    search_mode: Literal["companies", "market", "both"] = "both"
     preferred_country: Optional[str] = None
     location_pref: Optional[str] = None
     geo_scope: Optional[str] = None
@@ -157,6 +158,7 @@ class SearchSessionCreate(BaseModel):
 
 class SearchSessionUpdate(BaseModel):
     role_title: Optional[str] = None
+    search_mode: Optional[Literal["companies", "market", "both"]] = None
     preferred_country: Optional[str] = None
     location_pref: Optional[str] = None
     geo_scope: Optional[str] = None
@@ -173,6 +175,7 @@ class SearchSessionOut(BaseModel):
     id: str
     user_id: str
     role_title: str
+    search_mode: Optional[str] = "both"
     status: str
     preferred_country: Optional[str] = None
     location_pref: Optional[str] = None
@@ -493,6 +496,14 @@ class CollectionMemberOut(BaseModel):
 class CollectionSimilarRequest(BaseModel):
     limit: int = 8
     country_code: Optional[str] = None
+
+
+class BrowseCompaniesRequest(BaseModel):
+    scope: str
+    sector: str
+    country_code: Optional[str] = None
+    exclude: list[str] = Field(default_factory=list)
+    limit: int = Field(default=10, ge=1, le=20)
 
 
 class ThemeSearchRequest(BaseModel):

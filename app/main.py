@@ -9,20 +9,23 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import GEMINI_API_KEY, GOOGLE_PLACES_API_KEY, OLLAMA_MODEL
-from app.database import Base, engine
+from app.database import Base, engine, ensure_schema
 from app.routers import (
+    advisor,
+    applications,
     base_documents,
     collections,
     companies,
     discovery,
     documents,
     geo,
+    onboarding,
     matches,
     sessions,
     skills,
@@ -43,6 +46,7 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_schema()
     logger.info("Database inizializzato")
 
     if GEMINI_API_KEY:
@@ -112,14 +116,51 @@ app.include_router(geo.router)
 app.include_router(discovery.router)
 app.include_router(base_documents.router)
 app.include_router(collections.router)
+app.include_router(applications.router)
+app.include_router(advisor.router)
+app.include_router(onboarding.router)
+app.include_router(discovery.catalog_router)
 
 
 # ---------------------------------------------------------------------
-# Frontend statico
+# Frontend
+#
+# L'interfaccia è la SPA React in frontend/ (si compila con `npm run build`
+# in frontend/, che scrive in frontend/dist). Se la build non c'è si dice
+# cosa fare, invece di servire in silenzio la vecchia interfaccia.
+# La vecchia SPA vanilla resta in frontend/legacy, raggiungibile su /legacy.
 # ---------------------------------------------------------------------
-if FRONTEND_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+DIST_DIR = FRONTEND_DIR / "dist"
+LEGACY_DIR = FRONTEND_DIR / "legacy"
+
+if LEGACY_DIR.exists():
+    app.mount("/static/legacy", StaticFiles(directory=str(LEGACY_DIR)), name="legacy-static")
+
+    @app.get("/legacy", include_in_schema=False)
+    def serve_legacy():
+        return FileResponse(str(LEGACY_DIR / "index.html"))
+
+if (DIST_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def serve_spa(path: str):
+        """Qualunque percorso non-API apre la SPA (il router è lato client);
+        un file reale in dist (favicon, ecc.) viene servito così com'è."""
+        if path.startswith("api/"):
+            raise HTTPException(404, "Endpoint non trovato")
+        candidate = (DIST_DIR / path).resolve()
+        if path and candidate.is_file() and DIST_DIR.resolve() in candidate.parents:
+            return FileResponse(str(candidate))
+        return FileResponse(str(DIST_DIR / "index.html"))
+else:
 
     @app.get("/", include_in_schema=False)
-    def serve_index():
-        return FileResponse(str(FRONTEND_DIR / "index.html"))
+    def frontend_not_built():
+        return HTMLResponse(
+            "<h1>JobMatcher</h1><p>Interfaccia non compilata. Esegui "
+            "<code>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</code> "
+            "e ricarica, oppure per sviluppare <code>npm run dev</code> "
+            "(porta 5173). Documentazione API: <a href='/docs'>/docs</a>. "
+            "Vecchia interfaccia: <a href='/legacy'>/legacy</a>.</p>"
+        )

@@ -104,6 +104,68 @@ def list_sessions(user_id: str, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/overview")
+def sessions_overview(user_id: str, db: Session = Depends(get_db)):
+    """Una riga per ricerca con i numeri che servono a riconoscerla a colpo
+    d'occhio — alimenta la lista del Resoconto senza dover aprire ogni
+    ricerca. Aggregati con GROUP BY: niente N+1 sulle sessioni."""
+    from sqlalchemy import func
+
+    get_user_or_404(db, user_id)
+    sessions = (
+        db.query(models.SearchSession)
+        .filter(models.SearchSession.user_id == user_id)
+        .order_by(models.SearchSession.created_at.desc())
+        .all()
+    )
+    ids = [s.id for s in sessions]
+    if not ids:
+        return []
+
+    listings = dict(
+        db.query(models.JobListing.session_id, func.count())
+        .filter(models.JobListing.session_id.in_(ids))
+        .group_by(models.JobListing.session_id).all()
+    )
+    match_rows = (
+        db.query(
+            models.Match.session_id,
+            func.count(),
+            func.max(models.Match.score),
+            func.sum(func.iif(models.Match.status == "new", 1, 0)),
+        )
+        .filter(models.Match.session_id.in_(ids))
+        .group_by(models.Match.session_id).all()
+    )
+    matches = {r[0]: (r[1], r[2], int(r[3] or 0)) for r in match_rows}
+    companies = dict(
+        db.query(models.TargetCompany.session_id, func.count())
+        .filter(models.TargetCompany.session_id.in_(ids))
+        .group_by(models.TargetCompany.session_id).all()
+    )
+
+    out = []
+    for s in sessions:
+        m = matches.get(s.id, (0, None, 0))
+        out.append({
+            "id": s.id,
+            "role_title": s.role_title,
+            "search_mode": s.search_mode or "both",
+            "preferred_country": s.preferred_country,
+            "location_pref": s.location_pref,
+            "status": s.status,
+            "match_threshold": s.match_threshold,
+            "created_at": s.created_at,
+            "last_run_at": s.last_run_at,
+            "listings_count": listings.get(s.id, 0),
+            "matches_count": m[0],
+            "best_score": m[1],
+            "new_matches": m[2],
+            "companies_count": companies.get(s.id, 0),
+        })
+    return out
+
+
 @router.get("/{session_id}", response_model=schemas.SearchSessionOut)
 def get_session(user_id: str, session_id: str, db: Session = Depends(get_db)):
     return get_session_or_404(db, user_id, session_id)
@@ -186,8 +248,8 @@ async def start_search(
     if session.status == "running":
         raise HTTPException(409, "Una ricerca è già in corso per questa sessione")
 
-    if not session.companies and not session.role_title:
-        raise HTTPException(400, "Configura almeno il ruolo o un'azienda target")
+    if session.search_mode == "companies" and not session.companies:
+        raise HTTPException(400, "Questa ricerca è sulle tue aziende, ma la lista è vuota")
 
     session.status = "running"
     session.progress_current = 0
@@ -355,7 +417,9 @@ async def get_intelligence_report(
             llm = LLMGateway(db=db)
             matcher = MatchingEngine(llm)
             user_skills = [s.name for s in session.user.hard_skills]
-            raw_alts = await matcher.suggest_alternative_roles(session.role_title, user_skills)
+            raw_alts = await matcher.suggest_alternative_roles(
+                session.role_title or "un ruolo adatto al mio profilo", user_skills
+            )
             alternatives = [
                 schemas.AlternativeRole(
                     role=a.get("role", ""),

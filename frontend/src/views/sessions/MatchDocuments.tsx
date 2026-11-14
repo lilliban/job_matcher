@@ -1,0 +1,151 @@
+import { useState } from "react";
+import { toast } from "sonner";
+import { Download, Eye } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useMatchDocuments } from "@/api/queries";
+import type { GeneratedDocumentOut } from "@/api/schemas";
+
+const DOC_LABEL: Record<string, string> = {
+  cv: "CV su misura",
+  cover_letter: "Lettera",
+  email: "Email",
+};
+
+const EXPORT_FORMATS: Array<{ fmt: string; label: string }> = [
+  { fmt: "pdf", label: "PDF" },
+  { fmt: "docx", label: "DOCX" },
+  { fmt: "md", label: "Markdown" },
+  { fmt: "txt", label: "Testo" },
+];
+
+async function downloadDocument(docId: string, fmt: string, filename: string) {
+  const res = await fetch(`/api/documents/${docId}/export?fmt=${fmt}`, {
+    headers: {
+      "X-API-Token":
+        (import.meta.env.VITE_API_TOKEN as string | undefined) ?? "local-dev-token-2026",
+    },
+  });
+  if (!res.ok) {
+    toast.error("Export fallito");
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}.${fmt}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export function MatchDocuments({ matchId }: { matchId: string }) {
+  const docs = useMatchDocuments(matchId);
+  const [openDoc, setOpenDoc] = useState<GeneratedDocumentOut | null>(null);
+
+  if (docs.isLoading) return <div className="text-xs text-ink-faint">Carico documenti…</div>;
+  if (!docs.data || docs.data.length === 0) {
+    return (
+      <div className="rounded border border-dashed border-line p-4 text-sm text-ink-faint">
+        Nessun documento ancora generato per questo match.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="mb-2 font-mono text-xs uppercase tracking-wider text-ink-faint">
+        Documenti generati
+      </p>
+      <ul className="space-y-2">
+        {docs.data.map((d) => (
+          <li
+            key={d.id}
+            className="flex items-center justify-between rounded-sm border border-line bg-paper-2 px-3 py-2 text-sm"
+          >
+            <div>
+              <span className="font-medium">{DOC_LABEL[d.doc_type] ?? d.doc_type}</span>
+              <Badge variant="outline" className="ml-2">
+                {d.doc_type}
+              </Badge>
+            </div>
+            <div className="flex gap-1">
+              <Button size="sm" variant="ghost" onClick={() => setOpenDoc(d)}>
+                <Eye className="h-4 w-4" />
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {openDoc && (
+        <DocumentViewer
+          doc={openDoc}
+          onClose={() => setOpenDoc(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DocumentViewer({
+  doc,
+  onClose,
+}: {
+  doc: GeneratedDocumentOut;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded border border-line bg-paper shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between border-b border-line p-4">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-wider text-ink-faint">
+              {doc.doc_type}
+            </p>
+            <h3 className="font-serif text-xl">{DOC_LABEL[doc.doc_type] ?? doc.doc_type}</h3>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Chiudi
+          </Button>
+        </header>
+
+        <pre className="flex-1 overflow-y-auto whitespace-pre-wrap p-6 font-mono text-sm text-ink">
+          {doc.content}
+        </pre>
+
+        <footer className="flex flex-wrap gap-2 border-t border-line bg-paper-2 p-3">
+          {EXPORT_FORMATS.map((f) => (
+            <Button
+              key={f.fmt}
+              size="sm"
+              variant="outline"
+              onClick={() => downloadDocument(doc.id, f.fmt, `documento-${doc.doc_type}`)}
+            >
+              <Download className="mr-1 h-3 w-3" /> {f.label}
+            </Button>
+          ))}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              navigator.clipboard.writeText(doc.content ?? "");
+              toast.success("Testo copiato");
+            }}
+          >
+            Copia testo
+          </Button>
+        </footer>
+      </div>
+    </div>
+  );
+}

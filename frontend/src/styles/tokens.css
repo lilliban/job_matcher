@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens JobMatcher (migrati da frontend/style.css).
+ * Tailwind v4 li registra come utility class native (bg-ink, text-paper, ecc.).
+ */
+@theme {
+  --color-ink: #16171a;
+  --color-ink-soft: #4a4d55;
+  --color-ink-faint: #8b8f99;
+  --color-paper: #f7f6f3;
+  --color-paper-2: #ffffff;
+  --color-line: #e2e0da;
+  --color-line-hard: #c9c6bd;
+
+  --color-accent: #2f3aa8;
+  --color-accent-ink: #1e2578;
+  --color-accent-wash: #eceef9;
+
+  --color-good: #1f7a4d;
+  --color-good-wash: #e7f3ec;
+  --color-warn: #9a6212;
+  --color-warn-wash: #fbf1e0;
+  --color-bad: #a32f2f;
+  --color-bad-wash: #f8ebeb;
+
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-sm: 4px;
+  --radius: 4px;
+}
+
+/*
+ * Body defaults — allineati alla vecchia SPA (font, colori, dimensioni).
+ * Tailwind Preflight fornisce già margin/padding/box-sizing reset.
+ */
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Animazioni dell'avatar */
+@keyframes jm-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+.jm-blink { transform-box: fill-box; transform-origin: center; animation: jm-blink 4.5s infinite; }
+
+@keyframes jm-wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-18deg); }
+  75% { transform: rotate(14deg); }
+}
+.jm-wave { animation: jm-wave 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jm-blink, .jm-wave { animation: none; }
+}

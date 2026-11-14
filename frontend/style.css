@@ -1,3 +1,8 @@
+/* ============================================================
+   JobMatcher — foglio di stile
+   Direzione: strumento di lavoro, non vetrina. Ink su carta
+   tecnica, un solo accento (indaco) speso sulle azioni reali.
+   ============================================================ */
 
 :root {
   --ink:        #16171a;
@@ -262,37 +267,6 @@ input:focus, select:focus, textarea:focus {
 textarea { resize: vertical; line-height: 1.5; }
 select { cursor: pointer; }
 
-/* ---------------- Autocomplete (catalogo statico, filtro locale) ---------------- */
-.autocomplete { position: relative; }
-.autocomplete-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  background: var(--paper-2);
-  border: 1px solid var(--line-hard);
-  border-radius: var(--r);
-  box-shadow: 0 8px 24px rgba(22,23,26,.12);
-  list-style: none;
-  max-height: 220px;
-  overflow-y: auto;
-  display: none;
-}
-.autocomplete-list.is-open { display: block; }
-.autocomplete-list li {
-  padding: .5rem .7rem;
-  font-size: .85rem;
-  cursor: pointer;
-  border-top: 1px solid var(--line);
-}
-.autocomplete-list li:first-child { border-top: 0; }
-.autocomplete-list li:hover,
-.autocomplete-list li.is-active {
-  background: var(--accent-wash);
-  color: var(--accent-ink);
-}
-
 .inline-form {
   display: flex;
   gap: .55rem;
@@ -345,14 +319,6 @@ input[type="range"] {
 .btn-micro:hover { color: var(--ink); border-color: var(--ink-soft); }
 
 .btn-lg { padding: .7rem 1.5rem; font-size: .9rem; }
-
-.btn-cancel {
-  background: var(--paper-2);
-  border-color: var(--bad);
-  color: var(--bad);
-}
-.btn-cancel:hover { background: var(--bad-wash); }
-.btn-cancel:disabled { border-color: var(--line-hard); color: var(--ink-faint); cursor: not-allowed; }
 
 .btn-danger {
   background: none;
@@ -468,7 +434,6 @@ input[type="range"] {
 .badge-running   { background: var(--warn-wash); color: var(--warn); }
 .badge-completed { background: var(--good-wash); color: var(--good); }
 .badge-error     { background: var(--bad-wash); color: var(--bad); }
-.badge-cancelled { background: var(--line); color: var(--ink-faint); }
 
 /* ---------------- Tabs ---------------- */
 .tabs {
@@ -528,53 +493,6 @@ input[type="range"] {
   color: var(--ink-faint);
 }
 .co-card .btn { margin-top: .35rem; align-self: flex-start; }
-.co-actions { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: .35rem; }
-.co-actions .btn { margin-top: 0; }
-
-/* ---------------- Aziende d'interesse — checklist compatta (form iniziale) ---------------- */
-.preferred-companies-field summary {
-  cursor: pointer;
-  font-size: .875rem;
-  color: var(--ink);
-  padding: .5rem .65rem;
-  border: 1px solid var(--line-hard);
-  border-radius: var(--r);
-  background: var(--paper-2);
-  list-style: none;
-}
-.preferred-companies-field summary::-webkit-details-marker { display: none; }
-.preferred-companies-field summary::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: .5rem;
-  color: var(--ink-faint);
-  transition: transform .15s;
-}
-.preferred-companies-field[open] summary::before { transform: rotate(90deg); }
-
-.preferred-companies-checklist {
-  margin-top: .5rem;
-  max-height: 220px;
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: .3rem .6rem;
-}
-.preferred-check-row {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  padding: .4rem 0;
-  border-top: 1px solid var(--line);
-}
-.preferred-check-row:first-child { border-top: 0; }
-.preferred-check-row input[type="checkbox"] {
-  accent-color: var(--accent);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.preferred-check-name { flex: 1; font-size: .83rem; cursor: pointer; }
-.preferred-check-row .btn-micro { padding: .1rem .45rem; font-size: .78rem; }
 
 .similar-head {
   display: flex;
@@ -594,38 +512,11 @@ input[type="range"] {
   gap: 1rem;
   margin-bottom: .75rem;
 }
-.run-meta { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+.run-meta { display: flex; align-items: baseline; gap: .7rem; min-width: 0; }
 .run-state {
   text-transform: uppercase;
   letter-spacing: .1em;
   color: var(--ink-faint);
-}
-
-/* Indicatore "in corso" — disaccoppiato dalla progress bar: nelle fasi
-   iniziali (progress_total ancora 0) la barra è a 0% e sembrerebbe ferma
-   anche se la ricerca è viva. Lo spinner comunica "in corso" a prescindere
-   da quanto c'è già da mostrare in percentuale. */
-.run-spinner {
-  display: none;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 2px solid var(--line-hard);
-  border-top-color: var(--accent);
-  flex-shrink: 0;
-  animation: run-spin .8s linear infinite;
-}
-.run-spinner.is-active { display: inline-block; }
-@keyframes run-spin { to { transform: rotate(360deg); } }
-.badge-spinner {
-  width: 7px;
-  height: 7px;
-  border-width: 1.5px;
-  border-color: rgba(0,0,0,.15);
-  border-top-color: currentColor; /* eredita il colore testo del badge (warn/good/bad) */
-  vertical-align: middle;
-  margin-right: .3rem;
-  margin-top: -1px;
 }
 .run-msg {
   font-size: .85rem;
@@ -647,17 +538,6 @@ input[type="range"] {
   width: 0;
   background: var(--accent);
   transition: width .4s ease;
-}
-.progress-fill.is-running {
-  background-image: linear-gradient(
-    90deg, var(--accent) 0%, var(--accent-ink) 50%, var(--accent) 100%
-  );
-  background-size: 200% 100%;
-  animation: run-shimmer 1.4s linear infinite;
-}
-@keyframes run-shimmer {
-  from { background-position: 200% 0; }
-  to   { background-position: -200% 0; }
 }
 
 .log {
@@ -692,7 +572,34 @@ input[type="range"] {
 .pill:hover { color: var(--ink); }
 .pill.is-active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
-/* ---------------- Score (riusato nella card Statistiche, Zona B) ---------------- */
+/* ---------------- Match list ---------------- */
+.match-list { display: flex; flex-direction: column; gap: .7rem; }
+.match {
+  border: 1px solid var(--line-hard);
+  border-radius: var(--r);
+  padding: 1rem 1.1rem;
+  background: var(--paper-2);
+}
+.match-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.2rem;
+}
+.match-title {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  line-height: 1.15;
+}
+.match-co {
+  font-size: .8rem;
+  color: var(--ink-soft);
+  margin-top: .15rem;
+}
+.match-score {
+  text-align: right;
+  flex-shrink: 0;
+}
 .score-num {
   font-family: var(--mono);
   font-size: 1.5rem;
@@ -735,171 +642,23 @@ input[type="range"] {
   line-height: 1.5;
 }
 
-/* ---------------- Risultati — layout a 3 zone ---------------- */
-.results-layout {
-  display: grid;
-  grid-template-columns: 40fr 55fr;
-  gap: 1.5rem;
-  align-items: start;
-}
-.results-left { min-width: 0; }
-.back-to-list { display: none; margin-bottom: .85rem; }
-
-/* Zona B — dettaglio annuncio selezionato */
-.detail-panel {
-  background: var(--paper-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: 1.25rem;
-  margin-bottom: 1.25rem;
-  min-height: 120px;
-}
-.detail-placeholder {
-  color: var(--ink-faint);
-  font-size: .85rem;
-  font-style: italic;
-  padding: 1rem 0;
-}
-.detail-grid {
-  display: grid;
-  /* 4 colonne fisse dentro una colonna larga solo il 40% della pagina
-     davano ~110px a card: testo a capo carattere per carattere. Con
-     auto-fit + minmax le card si dispongono su quante colonne ci
-     stanno davvero (di norma 2 su desktop), mai più strette di 190px. */
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: .75rem;
-}
-.detail-card {
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--paper);
-  padding: .85rem;
+.match-foot {
   display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.detail-card-title {
-  font-size: .68rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--ink-faint);
-  margin-bottom: .6rem;
-}
-.detail-empty {
-  font-size: .78rem;
-  color: var(--ink-faint);
-  font-style: italic;
-  margin-bottom: .5rem;
-}
-.detail-score {
-  font-family: var(--mono);
-  font-size: 1.6rem;
-  font-weight: 500;
-  line-height: 1;
-}
-.detail-score.hi { color: var(--good); }
-.detail-score.mid { color: var(--warn); }
-.detail-score.lo { color: var(--ink-faint); }
-.detail-score-cap {
-  font-family: var(--mono);
-  font-size: .6rem;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--ink-faint);
-  margin: .2rem 0 .5rem;
-}
-.detail-status-select { margin-top: .6rem; font-size: .76rem; padding: .3rem .5rem; }
-.detail-doc-preview {
-  font-size: .78rem;
-  color: var(--ink-soft);
-  line-height: 1.5;
-  margin-bottom: .7rem;
-  flex: 1;
-}
-.detail-card-actions { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: auto; }
-.detail-card-actions .btn { font-size: .74rem; padding: .35rem .6rem; }
-
-/* Zona A — lista annunci raccolti */
-.listing-panel { margin-bottom: 0; }
-.listing-list {
-  display: flex;
-  flex-direction: column;
-  gap: .4rem;
-  max-height: 60vh;
-  overflow-y: auto;
-  margin-top: .5rem;
-}
-.listing-card {
-  padding: .65rem .85rem;
-  border-radius: var(--r);
-  border: 1px solid var(--line);
-  background: var(--paper);
-  cursor: pointer;
-  transition: border-color .12s, box-shadow .12s;
-}
-.listing-card:hover { border-color: var(--line-hard); }
-.listing-card.is-match { background: var(--accent-wash); border-color: transparent; }
-.listing-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-wash); }
-.listing-line {
-  display: flex;
-  align-items: baseline;
-  gap: .4rem;
+  align-items: center;
+  gap: .45rem;
   flex-wrap: wrap;
-  font-size: .85rem;
+  padding-top: .8rem;
+  border-top: 1px solid var(--line);
 }
-.listing-role { font-weight: 600; }
-.listing-arrow { color: var(--ink-faint); }
-.listing-co { color: var(--ink-soft); font-size: .78rem; }
-.listing-meta { display: flex; align-items: center; gap: .5rem; margin-top: .35rem; }
-.listing-meta .badge { background: var(--line); color: var(--ink-soft); }
-.listing-score { font-family: var(--mono); font-size: .72rem; font-weight: 600; }
-.listing-score.hi { color: var(--good); }
-.listing-score.mid { color: var(--warn); }
-.listing-score.lo { color: var(--ink-faint); }
-
-/* Zona C — contenuto annuncio */
-.results-right {
-  background: var(--paper-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: 1.5rem;
-  position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
-}
-.listing-content-placeholder {
-  color: var(--ink-faint);
-  font-size: .85rem;
-  font-style: italic;
-}
-.lc-eyebrow {
+.match-foot select { width: auto; font-size: .76rem; padding: .3rem .5rem; }
+.match-src {
+  margin-left: auto;
   font-family: var(--mono);
-  font-size: .68rem;
-  text-transform: uppercase;
-  letter-spacing: .12em;
+  font-size: .66rem;
   color: var(--ink-faint);
-  margin-bottom: .4rem;
 }
-.lc-title { font-family: var(--serif); font-size: 1.6rem; line-height: 1.15; margin-bottom: .3rem; }
-.lc-company { font-size: .9rem; color: var(--ink-soft); }
-.lc-meta { font-size: .78rem; color: var(--ink-faint); margin-top: .3rem; }
-.lc-h4 {
-  font-size: .74rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--ink-faint);
-  margin: 1.25rem 0 .5rem;
-}
-.lc-text {
-  font-size: .85rem;
-  line-height: 1.65;
-  color: var(--ink);
-  white-space: pre-wrap;
-}
-.lc-foot { margin-top: 1.5rem; }
+.match-src a { color: var(--accent); text-decoration: none; }
+.match-src a:hover { text-decoration: underline; }
 
 /* ---------------- Intelligence ---------------- */
 .metric-row {
@@ -1045,111 +804,18 @@ input[type="range"] {
 }
 .sheet-foot {
   display: flex;
-  align-items: center;
   gap: .5rem;
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--line);
   flex-wrap: wrap;
 }
 
-/* ---------------- Revisione CV importato ---------------- */
-#cvReviewBody {
-  font-family: var(--sans);
-  font-size: .85rem;
-  white-space: normal;
-  line-height: 1.5;
-}
-.cv-section { margin-bottom: 1.5rem; }
-.cv-section:last-child { margin-bottom: 0; }
-.cv-section h4 {
-  font-size: .78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--ink-faint);
-  margin-bottom: .6rem;
-}
-.cv-check-row {
-  display: flex;
-  align-items: flex-start;
-  gap: .6rem;
-  padding: .55rem 0;
-  border-top: 1px solid var(--line);
-  cursor: pointer;
-}
-.cv-check-row:first-child { border-top: 0; }
-.cv-check-row input[type="checkbox"] {
-  margin-top: .2rem;
-  accent-color: var(--accent);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.cv-check-main { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
-.cv-check-label { font-weight: 500; }
-.cv-check-value { color: var(--ink-soft); font-size: .82rem; }
-.cv-check-current {
-  color: var(--ink-faint);
-  font-size: .74rem;
-  text-decoration: line-through;
-}
-.cv-critique-text {
-  font-size: .85rem;
-  color: var(--ink-soft);
-  line-height: 1.7;
-  white-space: pre-wrap;
-  background: var(--paper);
-  border-left: 2px solid var(--accent);
-  padding: .8rem 1rem;
-}
-.cv-empty { font-size: .82rem; color: var(--ink-faint); font-style: italic; }
-
-/* ---------------- Save bar (sticky, view Profilo) ---------------- */
-.save-bar {
-  position: fixed;
-  left: var(--rail-w);
-  right: 0;
-  bottom: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1rem;
-  padding: .75rem 3.5rem;
-  background: var(--paper-2);
-  border-top: 1px solid var(--line-hard);
-  box-shadow: 0 -6px 20px rgba(22,23,26,.06);
-  transform: translateY(100%);
-  opacity: 0;
-  pointer-events: none;
-  transition: transform .22s ease-out, opacity .22s ease-out;
-}
-.save-bar.is-visible { transform: translateY(0); opacity: 1; pointer-events: auto; }
-.save-bar-text {
-  font-size: .8rem;
-  color: var(--ink-faint);
-  margin-right: auto;
-}
-.save-bar.is-dirty .save-bar-text { color: var(--accent-ink); }
-.save-bar.is-dirty .btn-primary {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-wash);
-}
-.save-bar.is-saved .btn-primary {
-  background: var(--good-wash);
-  color: var(--good);
-  border-color: transparent;
-}
-.save-bar.is-saved .btn-primary:hover { background: var(--good-wash); }
-.save-bar.is-saved .save-bar-text { color: var(--good); }
-
 /* ---------------- Toast ---------------- */
 .toast {
   position: fixed;
-  bottom: 0;
+  bottom: 1.5rem;
   left: 50%;
-  /* 100% + margine fisso: copre qualunque altezza del messaggio, non solo
-     quelle sopra i ~48px come succedeva con "bottom: 1.5rem" + 150% */
-  transform: translateX(-50%) translateY(calc(100% + 2rem));
+  transform: translateX(-50%) translateY(140%);
   background: var(--ink);
   color: var(--paper);
   padding: .6rem 1.1rem;
@@ -1159,7 +825,7 @@ input[type="range"] {
   transition: transform .28s cubic-bezier(.2,.8,.2,1);
   max-width: 90vw;
 }
-.toast.is-up { transform: translateX(-50%) translateY(-1.5rem); }
+.toast.is-up { transform: translateX(-50%) translateY(0); }
 .toast.bad { background: var(--bad); }
 .toast.ok  { background: var(--good); }
 
@@ -1189,21 +855,6 @@ input[type="range"] {
   .display { font-size: 2.1rem; }
   .grid-2 { grid-template-columns: 1fr; }
   .panel-action { flex-direction: column; align-items: stretch; }
-  .save-bar { left: 0; padding: .65rem 1.25rem; }
-  .save-bar-text { display: none; }
-
-  .results-layout { display: block; }
-  .results-right {
-    position: static;
-    max-height: none;
-    margin-top: 1rem;
-  }
-  .results-layout.show-detail .listing-panel { display: none; }
-  .results-layout:not(.show-detail) .detail-panel,
-  .results-layout:not(.show-detail) .results-right { display: none; }
-  .results-layout.show-detail .back-to-list { display: inline-flex; }
-  /* .detail-grid non serve più un override qui: auto-fit/minmax nella
-     regola base si adatta già da solo alla larghezza disponibile */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1211,15 +862,4 @@ input[type="range"] {
     animation-duration: .01ms !important;
     transition-duration: .01ms !important;
   }
-}
-
-.soft-similar {
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--line-hard);
-}
-.soft-similar-title {
-  font-size: 0.82rem;
-  color: var(--ink-faint);
-  margin-bottom: 0.5rem;
 }

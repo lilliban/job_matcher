@@ -304,6 +304,11 @@ class SearchSession(Base):
     salary_min = Column(Integer, nullable=True)
     salary_max = Column(Integer, nullable=True)
     match_threshold = Column(Float, default=0.5)
+    # companies = solo le aziende scelte · market = portali + archivio
+    # annunci, qualunque azienda · both = entrambi (ricerche create prima
+    # che il campo esistesse). role_title può essere vuoto: significa
+    # "qualunque ruolo adatto al mio profilo".
+    search_mode = Column(String, default="both")
     created_at = Column(DateTime, default=utcnow)
     last_run_at = Column(DateTime, nullable=True)
 

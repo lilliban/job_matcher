@@ -17,12 +17,13 @@ I vecchi endpoint restano dove sono e continuano a funzionare.
 """
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import schemas
 from app.core.security import verify_token
 from app.database import get_db
+from app.services import company_catalog
 from app.services.collections import companies_by_theme
 from app.services.company_discovery import CompanyDiscoveryEngine
 from app.services.llm_gateway import LLMGateway
@@ -76,3 +77,30 @@ async def search_by_theme(
         limit=payload.limit, country_code=payload.country_code,
     )
     return [schemas.CompanySuggestion(**r) for r in results]
+
+
+@router.post("/browse", response_model=list[schemas.CompanySuggestion])
+async def browse_companies(
+    user_id: str, payload: schemas.BrowseCompaniesRequest, db: Session = Depends(get_db)
+):
+    """Aziende per ambito (nazionali, europee, multinazionali…) e settore."""
+    try:
+        results = await company_catalog.browse(
+            _engine(db), payload.scope, payload.sector,
+            country_code=payload.country_code, exclude=payload.exclude,
+            limit=payload.limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return [schemas.CompanySuggestion(**r) for r in results]
+
+
+catalog_router = APIRouter(
+    prefix="/api/company-catalog", tags=["Aziende"], dependencies=[Depends(verify_token)]
+)
+
+
+@catalog_router.get("")
+def get_catalog():
+    """Ambiti, settori e paesi tra cui scegliere."""
+    return company_catalog.catalog()
