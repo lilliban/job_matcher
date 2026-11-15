@@ -84,6 +84,40 @@ def test_hard_skills_missing_name_key_no_crash():
     assert engine.user_skills == ["python"]
 
 
+# --- seniority_check: min_years_exp e filtro storia ---
+
+def test_seniority_min_years_exp_over_2_excluded():
+    # DB dice 5 anni → scarta anche se il testo è vuoto
+    incompatible, reason = seniority_check("Python Developer", "", min_years_exp=5)
+    assert incompatible is True
+    assert "5" in reason
+
+
+def test_seniority_min_years_exp_1_kept():
+    # DB dice 1 anno → tieni, non serve guardare il testo
+    incompatible, _ = seniority_check("Python Developer", "5+ anni di esperienza", min_years_exp=1)
+    assert incompatible is False
+
+
+def test_seniority_fallback_regex_on_missing_min_years():
+    # Nessun valore DB → regex sul testo trova "5 anni"
+    incompatible, reason = seniority_check("Python Developer", "richiede 5 anni di esperienza")
+    assert incompatible is True
+    assert "5" in reason
+
+
+def test_seniority_ignores_very_high_years_in_text():
+    # 30 anni > 15 → ignorato dalla regex (è storia aziendale)
+    incompatible, _ = seniority_check("Software Engineer", "azienda con 30 years of experience nel settore")
+    assert incompatible is False
+
+
+def test_seniority_ignores_history_phrase_in_text():
+    # "anni di storia" → contesto storico, non requisito di esperienza
+    incompatible, _ = seniority_check("Software Engineer", "10 anni di storia aziendale")
+    assert incompatible is False
+
+
 def test_soft_skills_as_dicts_no_crash():
     # soft_skills come lista di dict non deve dare TypeError nel prompt
     profile = {

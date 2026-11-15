@@ -4,11 +4,15 @@ from unittest.mock import patch
 import pytest
 
 from app.services.feed_reader import (
+    ALLOWED_COUNTRIES,
+    EUROPE_COUNTRIES,
     POSTING_COLUMNS,
+    country_ok,
     download_feed,
     is_tech_role,
     load_postings,
     prefilter,
+    role_category,
 )
 
 
@@ -94,6 +98,116 @@ def test_prefilter_separates_correctly():
     reasons = {d["title"]: d["_discard_reason"] for d in discarded}
     assert reasons["Chef de Cuisine"] == "ruolo non tecnico"
     assert reasons["Senior Software Director"] != ""
+
+
+# ---------------------------------------------------------------------------
+# country_ok
+# ---------------------------------------------------------------------------
+
+def test_country_ok_in_allowed():
+    assert country_ok({"country_code": "DE"}) is True
+    assert country_ok({"country_code": "CH"}) is True
+    assert country_ok({"country_code": "NL"}) is True
+
+
+def test_country_ok_not_in_allowed_onsite():
+    assert country_ok({"country_code": "IT", "work_mode": "onsite"}) is False
+    assert country_ok({"country_code": "US"}) is False
+
+
+def test_country_ok_empty_country():
+    assert country_ok({"country_code": ""}) is True
+    assert country_ok({"country_code": None}) is True
+    assert country_ok({}) is True
+
+
+def test_country_ok_remote_europe():
+    # remoto da paesi in EUROPE_COUNTRIES → tieni
+    assert country_ok({"country_code": "FR", "work_mode": "remote"}) is True
+    assert country_ok({"country_code": "GB", "work_mode": "remote"}) is True
+    assert country_ok({"country_code": "IT", "work_mode": "remote"}) is True
+
+
+def test_country_ok_remote_non_europe():
+    # remoto da fuori Europa → scarta
+    assert country_ok({"country_code": "US", "work_mode": "remote"}) is False
+    assert country_ok({"country_code": "IN", "work_mode": "remote"}) is False
+
+
+def test_prefilter_discards_wrong_country():
+    postings = [
+        {"title": "Data Engineer", "country_code": "IT", "work_mode": "onsite", "requirements_raw": ""},
+        {"title": "Data Engineer", "country_code": "DE", "requirements_raw": ""},
+    ]
+    kept, discarded = prefilter(postings)
+    assert len(kept) == 1
+    assert kept[0]["country_code"] == "DE"
+    assert discarded[0]["_discard_reason"] == "paese non in lista (IT)"
+
+
+# ---------------------------------------------------------------------------
+# is_tech_role — consultant qualifier
+# ---------------------------------------------------------------------------
+
+def test_is_tech_role_consultant_no_qualifier():
+    assert is_tech_role("Sales Consultant") is False
+    assert is_tech_role("Consulente Commerciale") is False
+    assert is_tech_role("Marketing Berater") is False
+
+
+def test_is_tech_role_consultant_with_it():
+    assert is_tech_role("IT Consultant") is True
+
+
+def test_is_tech_role_consultant_with_tech_qualifier():
+    assert is_tech_role("SAP Consultant") is True    # priority 2 via SAP
+    assert is_tech_role("Digital Consultant") is True  # priority 1 via digital consultant
+    assert is_tech_role("IT Consultant") is True      # priority 1
+
+
+# ---------------------------------------------------------------------------
+# role_category — priorità
+# ---------------------------------------------------------------------------
+
+def test_role_category_priority_1():
+    for title in [
+        "Junior Business Analyst",
+        "Scrum Master",
+        "Demand Planner",
+        "Data Engineer",
+    ]:
+        result = role_category(title)
+        assert result is not None and result[1] == 1, f"atteso priorità 1 per '{title}'"
+
+
+def test_role_category_priority_2():
+    assert role_category("SAP Consultant") == ("consulting_security", 2)
+    assert role_category("Cybersecurity Analyst") == ("consulting_security", 2)
+
+
+def test_role_category_priority_3():
+    assert role_category("Software Engineer") == ("software", 3)
+
+
+def test_role_category_priority_4():
+    assert role_category("IT Support Specialist") == ("support_qa", 4)
+    assert role_category("QA Engineer") == ("support_qa", 4)
+
+
+def test_role_category_excludes_hardware_and_non_tech():
+    assert role_category("UX Designer") is None
+    assert role_category("Ingenieur Elektrotechnik") is None
+    assert role_category("ASIC Digital Design Engineer") is None
+    assert role_category("Mechanical Engineer") is None
+    assert role_category("Sales Consultant") is None
+
+
+def test_country_ok_remote_de_kept():
+    assert country_ok({"country_code": "DE", "work_mode": "remote"}) is True
+
+
+def test_country_ok_remote_us_discarded():
+    assert country_ok({"country_code": "US", "work_mode": "remote"}) is False
 
 
 # ---------------------------------------------------------------------------

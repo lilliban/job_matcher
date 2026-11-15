@@ -23,6 +23,12 @@ FEED_REPO = "lilliban/eu-job-feeds"
 FEED_ASSET = "jobs.sqlite.gz"
 CACHE_MAX_AGE_SECONDS = 6 * 3600
 
+ALLOWED_COUNTRIES = ["CH", "DE", "NL"]
+EUROPE_COUNTRIES = [
+    "CH", "DE", "NL", "IT", "AT", "FR", "BE", "LU", "ES", "PT",
+    "IE", "GB", "PL", "SE", "DK", "NO", "FI",
+]
+
 # Colonne lette dalla tabella postings — ordine fisso, usato anche nei test.
 # Le chiavi title, company_name, location, contract_type, description e
 # requirements_raw corrispondono ai nomi già usati da MatchingEngine.filter_incompatible.
@@ -44,59 +50,99 @@ POSTING_COLUMNS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Filtro ruoli tecnici
+# Classificazione ruoli tech a livelli (priorità 1–4)
 # ---------------------------------------------------------------------------
 
-_TECH_KW = [
-    # software / engineering
-    "software", "developer", "sviluppatore", "entwickler", "programmatore", "programmeur",
-    "engineer", "ingegnere", "ingenieur",
-    "backend", "back-end", "frontend", "front-end", "fullstack", "full-stack",
-    "mobile", "ios", "android", "flutter",
-    "python", "java", "javascript", "typescript", "golang", "kotlin",
-    # data
-    "data", "dati", "daten",
-    "analytics", "analyst", "analista", "analytiker",
-    "statistician", "statistico",
-    "warehouse", "pipeline", "etl",
-    # BI
-    "business intelligence", "tableau", "power bi", "qlik", "looker", "dbt", "bi",
-    # AI / ML
-    "machine learning", "deep learning", "computer vision",
-    "artificial intelligence", "intelligenza artificiale",
-    "nlp", "llm", "neural", "ai",
-    "mlops", "dataops",
-    # DevOps / cloud / infra
-    "devops", "dev ops", "dev-ops", "sre",
-    "cloud", "kubernetes", "k8s", "docker", "terraform",
-    "infrastructure", "infrastruttura", "platform",
-    # IT consulting / ERP
-    "consultant", "consulente", "berater",
-    "erp", "sap", "salesforce", "crm",
-    # business analyst
-    "business analyst",
-    # demand forecasting / supply chain
-    "demand forecasting", "demand planner", "forecasting",
-    "supply chain", "supply-chain",
+# Titoli con queste parole vengono esclusi a meno che contengano
+# anche "software", "data" o "ai"
+_EXCL_RE = re.compile(
+    r"\bux\b"
+    r"|\bui\s+designer\b"
+    r"|\belektro"           # prefisso: Elektrotechnik, Elektriker ecc.
+    r"|\belectrical\b"
+    r"|\belectronics\b"
+    r"|\basic\b"
+    r"|\bmechanical\b"
+    r"|\bmechanisch\b"
+    r"|\bhardware\b"
+    r"|\bcivil\b"
+    r"|\bchemical\b"
+    r"|\bprocess\s+engineer\b",
+    re.IGNORECASE,
+)
+_EXCL_OVERRIDE_RE = re.compile(r"\b(?:software|data|ai)\b", re.IGNORECASE)
+
+# "product manager" vale solo se il titolo contiene junior/associate/assistant
+_PM_RE = re.compile(r"\bproduct\s+manager\b", re.IGNORECASE)
+_PM_QUALIFIER_RE = re.compile(r"\b(?:junior|associate|assistant)\b", re.IGNORECASE)
+
+# Ciascuna tupla: (priorità, categoria, [pattern ...])
+_PRIORITY_RULES: list[tuple[int, str, list[re.Pattern]]] = [
+    (1, "analytics_ai", [
+        re.compile(r"\bbusiness\s+analyst\b", re.IGNORECASE),
+        re.compile(r"\brequirements(?:\s+engineer)?\b", re.IGNORECASE),
+        re.compile(r"\bproduct\s+owner\b", re.IGNORECASE),
+        re.compile(r"\bscrum\s+master\b", re.IGNORECASE),
+        re.compile(r"\b(?:it|digital|technology)\s+consult(?:ant|ing)\b", re.IGNORECASE),
+        re.compile(r"\bdata\s+analyst\b", re.IGNORECASE),
+        re.compile(r"\b(?:bi|business\s+intelligence)\b", re.IGNORECASE),
+        re.compile(r"\b(?:forecasting|demand\s+plan(?:ning|ner|s)?)\b", re.IGNORECASE),
+        re.compile(r"\bsupply\s+chain\s+(?:analyst|analytics)\b", re.IGNORECASE),
+        re.compile(r"\b(?:machine|reinforcement)\s+learning\b", re.IGNORECASE),
+        re.compile(r"\bai\b", re.IGNORECASE),
+        re.compile(r"\bresearch\s+(?:scientist|engineer)\b", re.IGNORECASE),
+        re.compile(r"\bdata\s+(?:engineer|scientist|science)\b", re.IGNORECASE),
+    ]),
+    (2, "consulting_security", [
+        re.compile(r"\bproject\s+(?:coordinator|assistant)\b", re.IGNORECASE),
+        re.compile(r"\bpmo\b", re.IGNORECASE),
+        re.compile(r"\bsecurity\s+analyst\b", re.IGNORECASE),
+        re.compile(r"\bcybersecurity\b", re.IGNORECASE),
+        re.compile(r"\bsoc\b", re.IGNORECASE),
+        re.compile(r"\bsap\b", re.IGNORECASE),
+        re.compile(r"\berp\b", re.IGNORECASE),
+    ]),
+    (3, "software", [
+        re.compile(r"\bsoftware\s+(?:developer|engineer)\b", re.IGNORECASE),
+        re.compile(r"\b(?:backend|back-end|frontend|front-end|fullstack|full-stack)\b", re.IGNORECASE),
+        re.compile(r"\bweb\s+developer\b", re.IGNORECASE),
+        re.compile(r"\bapplication\s+developer\b", re.IGNORECASE),
+        re.compile(r"\bdevops\b", re.IGNORECASE),
+    ]),
+    (4, "support_qa", [
+        re.compile(r"\bit\s+support\b", re.IGNORECASE),
+        re.compile(r"\b(?:help\s+desk|helpdesk|service\s+desk|servicedesk)\b", re.IGNORECASE),
+        re.compile(r"\bqa\b", re.IGNORECASE),
+        re.compile(r"\btest\s+(?:analyst|automation)\b", re.IGNORECASE),
+        re.compile(r"\btester\b", re.IGNORECASE),
+    ]),
 ]
 
 
-def _build_tech_re(keywords: list[str]) -> re.Pattern:
-    sorted_kws = sorted(set(keywords), key=len, reverse=True)
-    pattern = "|".join(re.escape(kw) for kw in sorted_kws)
-    return re.compile(rf"\b(?:{pattern})\b", re.IGNORECASE)
+def role_category(title: str) -> tuple[str, int] | None:
+    """Classifica il titolo in una categoria tech con priorità 1–4.
 
-
-_TECH_RE = _build_tech_re(_TECH_KW)
+    Ritorna (categoria, priorità) o None se il titolo non è tech o è escluso.
+      1 analytics_ai  — data, AI, analytics, BI, forecasting
+      2 consulting_security — SAP, ERP, cybersecurity, PMO
+      3 software — software engineer/developer, backend, frontend, DevOps
+      4 support_qa — IT support, QA, helpdesk, tester
+    """
+    if not title:
+        return None
+    if _EXCL_RE.search(title) and not _EXCL_OVERRIDE_RE.search(title):
+        return None
+    if _PM_RE.search(title) and _PM_QUALIFIER_RE.search(title):
+        return ("analytics_ai", 1)
+    for priority, category, patterns in _PRIORITY_RULES:
+        for pat in patterns:
+            if pat.search(title):
+                return (category, priority)
+    return None
 
 
 def is_tech_role(title: str) -> bool:
-    """True se il titolo rientra nelle categorie tech monitorate.
-
-    Politica: in caso di dubbio tieni l'annuncio — è meglio un falso
-    positivo che perdere un match ottimo.
-    """
-    return bool(_TECH_RE.search(title or ""))
+    return role_category(title) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -165,14 +211,38 @@ def load_postings(db_path: str | Path) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Filtro paese
+# ---------------------------------------------------------------------------
+
+def country_ok(posting: dict) -> bool:
+    """True se l'annuncio è geograficamente rilevante.
+
+    - Paese vuoto → tieni (sconosciuto, dubbio pro-annuncio)
+    - CH, DE, NL (ALLOWED_COUNTRIES) → sempre tieni
+    - Remoto + paese in EUROPE_COUNTRIES → tieni
+    - Altrimenti → scarta
+    """
+    country = posting.get("country_code") or ""
+    if not country:
+        return True
+    if country in ALLOWED_COUNTRIES:
+        return True
+    work_mode = (posting.get("work_mode") or "").lower()
+    if work_mode == "remote" and country in EUROPE_COUNTRIES:
+        return True
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Pre-filtro combinato
 # ---------------------------------------------------------------------------
 
 def prefilter(postings: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Applica is_tech_role poi seniority_check a ogni annuncio.
+    """Applica country_ok, role_category e seniority_check a ogni annuncio.
 
-    Ritorna (kept, discarded).  Gli elementi di discarded hanno la chiave
-    aggiuntiva '_discard_reason' con la motivazione dello scarto.
+    Ritorna (kept, discarded).
+    - Discarded: chiave '_discard_reason'
+    - Kept: chiavi '_role_category' e '_role_priority'
     """
     kept: list[dict] = []
     discarded: list[dict] = []
@@ -180,15 +250,30 @@ def prefilter(postings: list[dict]) -> tuple[list[dict], list[dict]]:
     for p in postings:
         title = p.get("title") or ""
 
-        if not is_tech_role(title):
+        # 1. Paese
+        if not country_ok(p):
+            country = p.get("country_code") or "??"
+            discarded.append({**p, "_discard_reason": f"paese non in lista ({country})"})
+            continue
+
+        # 2. Categoria ruolo tech
+        rc = role_category(title)
+        if rc is None:
             discarded.append({**p, "_discard_reason": "ruolo non tecnico"})
             continue
 
+        # 3. Seniority — usa min_years_exp dal DB se disponibile
+        min_ye_raw = p.get("min_years_exp")
+        try:
+            min_ye: int | None = int(min_ye_raw) if min_ye_raw is not None else None
+        except (TypeError, ValueError):
+            min_ye = None
+
         text = p.get("requirements_raw") or p.get("description") or ""
-        is_incompatible, reason = seniority_check(title, text)
+        is_incompatible, reason = seniority_check(title, text, min_years_exp=min_ye)
         if is_incompatible:
             discarded.append({**p, "_discard_reason": reason})
         else:
-            kept.append(p)
+            kept.append({**p, "_role_category": rc[0], "_role_priority": rc[1]})
 
     return kept, discarded
