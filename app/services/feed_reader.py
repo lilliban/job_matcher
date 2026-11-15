@@ -57,29 +57,36 @@ POSTING_COLUMNS = [
 # a meno che contengano anche "software", "data", "ai" o "it"
 _BLACKLIST_RE = re.compile(
     r"\bsales\b"
-    r"|\bvertrieb\b"
-    r"|\bverkauf\b"
+    r"|\bvertrieb"          # radice: Vertriebsmitarbeiter, Außenvertrieb
+    r"|\bverkauf"           # radice: Verkaufsgebiet, Verkäufer
     r"|\bmarketing\b"
     r"|\bnurse\b"
-    r"|\bpflege\b"
+    r"|\bpflege"            # radice: Pflegehelfer, Altenpfleger
+    r"|\bpersonal"          # radice: Personalentwicklung, Personalabteilung
     r"|\bdriver\b"
-    r"|\bfahrer\b"
+    r"|\bfahrer"            # radice: Busfahrer, Lkw-Fahrer
     r"|\bcook\b"
-    r"|\bkoch\b"
+    r"|\bkoch"              # radice: Chefkoch, Hilfskoch
     r"|\bwarehouse\b"
-    r"|\blager\b"
+    r"|\blager"             # radice: Lagermitarbeiter, Warenlager
     r"|\baccountant\b"
-    r"|\bbuchhalter\b"
+    r"|\bbuchhalt"          # radice: Buchhalter, Buchhaltung
     r"|\blegal\b"
     r"|\bjurist\b"
-    r"|\brecruiter\b"
+    r"|\brecruit"           # radice: Recruiter, Recruiting, Recruitment
     r"|\bhr\b"
     r"|\bteacher\b"
     r"|\blehrer\b"
     r"|\bcashier\b"
     r"|\bkassierer\b"
     r"|\bcleaner\b"
-    r"|\breinigung\b"
+    r"|\breinigung"         # radice: Reinigungskraft, Gebäudereinigung
+    r"|\bfacilit"           # radice: Facilitair, Facility, Facilitation
+    r"|\bvorrat"            # radice: Vorratswirtschaft, Vorratsmanagement
+    r"|\bdangerous\s+goods\b"
+    r"|\bgefahrgut"
+    r"|\bmedical\b"
+    r"|\bfellow\b"
     r"|\bmechanic\b"
     r"|\bmechaniker\b"
     r"|\belectrician\b"

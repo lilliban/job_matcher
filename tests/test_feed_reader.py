@@ -260,3 +260,58 @@ def test_download_feed_raises_without_gh(tmp_path):
     with patch("app.services.feed_reader.shutil.which", return_value=None):
         with pytest.raises(RuntimeError, match="gh"):
             download_feed(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Blacklist estesa — radici composte tedesche + nuovi termini
+# ---------------------------------------------------------------------------
+
+def test_blacklist_discard_verkaufsgebiet():
+    # "Verkaufs" è prefisso composto di verkauf → scartato
+    assert role_category("Außendienstmitarbeiter für das Verkaufsgebiet") is None
+
+
+def test_blacklist_discard_facilitair():
+    assert role_category("Junior Facilitair Medewerker") is None
+
+
+def test_blacklist_discard_personalentwicklung_und_recruiting():
+    # personal + recruit — entrambe le radici colpiscono
+    assert role_category("Praktikum in der Personalentwicklung und Recruiting") is None
+
+
+def test_blacklist_discard_dangerous_goods():
+    assert role_category("Dangerous Goods Specialist") is None
+
+
+def test_blacklist_discard_medical_fellow():
+    assert role_category("Medical Fellow") is None
+
+
+def test_blacklist_keep_finance_associate():
+    # finance non è in blacklist → tenuto
+    assert role_category("Finance Associate") is not None
+
+
+def test_blacklist_keep_data_management():
+    # nessun termine in blacklist; "data" non è in blacklist quindi non serve override
+    assert role_category("Praktikum Data Management Fertigung") is not None
+
+
+def test_blacklist_keep_manufacturing_it():
+    # manufacturing non è in blacklist; "IT" è override anche se qualcosa matchasse
+    assert role_category("Werkstudent im Bereich Manufacturing IT") is not None
+
+
+def test_blacklist_keep_digital_solutions_engineer():
+    assert role_category("Digital Solutions Engineer") is not None
+
+
+def test_blacklist_personal_data_override():
+    # "personal" colpisce la blacklist ma "data" attiva l'override → tenuto
+    assert role_category("Personal Data Manager") is not None
+
+
+def test_blacklist_medical_software_override():
+    # "medical" colpisce ma "software" attiva l'override → tenuto
+    assert role_category("Medical Device Software Engineer") is not None
