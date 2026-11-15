@@ -73,10 +73,16 @@ def test_is_tech_role_keeps_tech():
 
 
 def test_is_tech_role_rejects_non_tech():
+    # Solo parole esplicitamente nella blacklist → scartate
     assert is_tech_role("Sales Manager") is False
-    assert is_tech_role("Baker") is False
+    assert is_tech_role("Nurse Practitioner") is False
     assert is_tech_role("HR Generalist") is False
-    assert is_tech_role("Responsabile Commerciale") is False
+
+
+def test_is_tech_role_unclassified_kept():
+    # Ruoli non in blacklist → tenuti come "unclassified"
+    assert is_tech_role("Controller") is True
+    assert is_tech_role("Process Analyst") is True
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +93,7 @@ def test_prefilter_separates_correctly():
     postings = [
         {"title": "Junior Data Engineer",    "company_name": "A", "requirements_raw": ""},
         {"title": "Senior Software Director","company_name": "B", "requirements_raw": ""},
-        {"title": "Chef de Cuisine",         "company_name": "C", "requirements_raw": ""},
+        {"title": "Sales Manager",           "company_name": "C", "requirements_raw": ""},
     ]
     kept, discarded = prefilter(postings)
 
@@ -96,7 +102,7 @@ def test_prefilter_separates_correctly():
     assert len(discarded) == 2
 
     reasons = {d["title"]: d["_discard_reason"] for d in discarded}
-    assert reasons["Chef de Cuisine"] == "ruolo non tecnico"
+    assert reasons["Sales Manager"] == "ruolo non tecnico"
     assert reasons["Senior Software Director"] != ""
 
 
@@ -150,9 +156,8 @@ def test_prefilter_discards_wrong_country():
 # ---------------------------------------------------------------------------
 
 def test_is_tech_role_consultant_no_qualifier():
-    assert is_tech_role("Sales Consultant") is False
-    assert is_tech_role("Consulente Commerciale") is False
-    assert is_tech_role("Marketing Berater") is False
+    assert is_tech_role("Sales Consultant") is False      # sales in blacklist
+    assert is_tech_role("Marketing Berater") is False     # marketing in blacklist
 
 
 def test_is_tech_role_consultant_with_it():
@@ -200,6 +205,43 @@ def test_role_category_excludes_hardware_and_non_tech():
     assert role_category("ASIC Digital Design Engineer") is None
     assert role_category("Mechanical Engineer") is None
     assert role_category("Sales Consultant") is None
+
+
+def test_role_category_priority_5():
+    assert role_category("Controller") == ("unclassified", 5)
+    assert role_category("Process Analyst") == ("unclassified", 5)
+
+
+def test_role_category_pm_conditional():
+    # Con qualifier → priorità 1
+    assert role_category("Associate Product Manager") == ("analytics_ai", 1)
+    # Senza qualifier → scivola a priorità 5
+    result = role_category("Product Manager")
+    assert result is not None and result[1] == 5
+
+
+def test_prefilter_keeps_unclassified():
+    postings = [
+        {"title": "Controller",    "requirements_raw": ""},
+        {"title": "Sales Manager", "requirements_raw": ""},
+    ]
+    kept, discarded = prefilter(postings)
+    assert len(kept) == 1
+    assert kept[0]["title"] == "Controller"
+    assert kept[0]["_role_category"] == "unclassified"
+    assert kept[0]["_role_priority"] == 5
+    assert discarded[0]["title"] == "Sales Manager"
+
+
+def test_prefilter_sorted_by_priority():
+    postings = [
+        {"title": "Software Engineer", "requirements_raw": ""},  # priority 3
+        {"title": "Data Engineer",     "requirements_raw": ""},  # priority 1
+        {"title": "Controller",        "requirements_raw": ""},  # priority 5
+    ]
+    kept, _ = prefilter(postings)
+    priorities = [p["_role_priority"] for p in kept]
+    assert priorities == sorted(priorities), f"not sorted: {priorities}"
 
 
 def test_country_ok_remote_de_kept():

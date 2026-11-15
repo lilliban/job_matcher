@@ -50,27 +50,53 @@ POSTING_COLUMNS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Classificazione ruoli tech a livelli (priorità 1–4)
+# Classificazione ruoli tech a livelli (priorità 1–5)
 # ---------------------------------------------------------------------------
 
-# Titoli con queste parole vengono esclusi a meno che contengano
-# anche "software", "data" o "ai"
-_EXCL_RE = re.compile(
-    r"\bux\b"
-    r"|\bui\s+designer\b"
-    r"|\belektro"           # prefisso: Elektrotechnik, Elektriker ecc.
+# Lista nera: titoli con queste parole sono scartati come "non tecnici",
+# a meno che contengano anche "software", "data", "ai" o "it"
+_BLACKLIST_RE = re.compile(
+    r"\bsales\b"
+    r"|\bvertrieb\b"
+    r"|\bverkauf\b"
+    r"|\bmarketing\b"
+    r"|\bnurse\b"
+    r"|\bpflege\b"
+    r"|\bdriver\b"
+    r"|\bfahrer\b"
+    r"|\bcook\b"
+    r"|\bkoch\b"
+    r"|\bwarehouse\b"
+    r"|\blager\b"
+    r"|\baccountant\b"
+    r"|\bbuchhalter\b"
+    r"|\blegal\b"
+    r"|\bjurist\b"
+    r"|\brecruiter\b"
+    r"|\bhr\b"
+    r"|\bteacher\b"
+    r"|\blehrer\b"
+    r"|\bcashier\b"
+    r"|\bkassierer\b"
+    r"|\bcleaner\b"
+    r"|\breinigung\b"
+    r"|\bmechanic\b"
+    r"|\bmechaniker\b"
+    r"|\belectrician\b"
+    r"|\belektriker\b"
     r"|\belectrical\b"
     r"|\belectronics\b"
-    r"|\basic\b"
+    r"|\belektro"           # prefisso: Elektrotechnik ecc.
     r"|\bmechanical\b"
-    r"|\bmechanisch\b"
-    r"|\bhardware\b"
     r"|\bcivil\b"
     r"|\bchemical\b"
-    r"|\bprocess\s+engineer\b",
+    r"|\basic\b"
+    r"|\bhardware\b"
+    r"|\bux\b"
+    r"|\bui\s+designer\b",
     re.IGNORECASE,
 )
-_EXCL_OVERRIDE_RE = re.compile(r"\b(?:software|data|ai)\b", re.IGNORECASE)
+_BLACKLIST_OVERRIDE_RE = re.compile(r"\b(?:software|data|ai|it)\b", re.IGNORECASE)
 
 # "product manager" vale solo se il titolo contiene junior/associate/assistant
 _PM_RE = re.compile(r"\bproduct\s+manager\b", re.IGNORECASE)
@@ -120,17 +146,17 @@ _PRIORITY_RULES: list[tuple[int, str, list[re.Pattern]]] = [
 
 
 def role_category(title: str) -> tuple[str, int] | None:
-    """Classifica il titolo in una categoria tech con priorità 1–4.
+    """Classifica il titolo in una categoria tech con priorità 1–5.
 
-    Ritorna (categoria, priorità) o None se il titolo non è tech o è escluso.
+    Ritorna (categoria, priorità):
       1 analytics_ai  — data, AI, analytics, BI, forecasting
       2 consulting_security — SAP, ERP, cybersecurity, PMO
       3 software — software engineer/developer, backend, frontend, DevOps
       4 support_qa — IT support, QA, helpdesk, tester
+      5 unclassified — nessun pattern riconosciuto ma nessuna parola non-tech
+    Ritorna None se il titolo è chiaramente non tecnico (blacklist senza override).
     """
     if not title:
-        return None
-    if _EXCL_RE.search(title) and not _EXCL_OVERRIDE_RE.search(title):
         return None
     if _PM_RE.search(title) and _PM_QUALIFIER_RE.search(title):
         return ("analytics_ai", 1)
@@ -138,7 +164,9 @@ def role_category(title: str) -> tuple[str, int] | None:
         for pat in patterns:
             if pat.search(title):
                 return (category, priority)
-    return None
+    if _BLACKLIST_RE.search(title) and not _BLACKLIST_OVERRIDE_RE.search(title):
+        return None
+    return ("unclassified", 5)
 
 
 def is_tech_role(title: str) -> bool:
@@ -276,4 +304,5 @@ def prefilter(postings: list[dict]) -> tuple[list[dict], list[dict]]:
         else:
             kept.append({**p, "_role_category": rc[0], "_role_priority": rc[1]})
 
+    kept.sort(key=lambda p: p["_role_priority"])
     return kept, discarded
