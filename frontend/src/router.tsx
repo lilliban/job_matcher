@@ -5,6 +5,7 @@ import { ProfileView } from "@/views/ProfileView";
 import { CompaniesView } from "@/views/CompaniesView";
 import { SessionsView } from "@/views/SessionsView";
 import { ReportView } from "@/views/ReportView";
+import { MatchesView } from "@/views/MatchesView";
 
 export const router = createBrowserRouter([
   {
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { path: "collections", element: <CompaniesView /> },
       { path: "sessions", element: <SessionsView /> },
       { path: "intelligence", element: <ReportView /> },
+      { path: "matches", element: <MatchesView /> },
     ],
   },
 ]);

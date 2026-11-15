@@ -62,3 +62,44 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .jm-blink, .jm-wave { animation: none; }
 }
+
+/*
+ * Vista "I tuoi match" — palette "Teal on paper" e Instrument Sans + DM Mono.
+ * I token sono ridefiniti solo dentro .jm-matches: le utility Tailwind
+ * (bg-paper, text-ink, bg-accent, font-sans…) e i componenti ui li
+ * ereditano, il resto dell'app resta com'è.
+ */
+.jm-matches {
+  --color-ink: #06525c;
+  --color-ink-soft: #1d646e;
+  --color-ink-faint: #2f737d;
+  --color-paper: #f7f9f8;
+  --color-paper-2: #ffffff;
+  --color-line: #dde5e2;
+  --color-line-hard: #b9c9c5;
+
+  --color-accent: #06525c;
+  --color-accent-ink: #043e46;
+  --color-accent-wash: #ebf0ee;
+
+  --font-sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+/* Risposta immediata alla pressione, non al rilascio */
+.jm-press { transition: transform 100ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out; }
+.jm-press:active { transform: scale(0.97); }
+
+/* La barra della copertura cresce una volta, quando la scheda compare */
+@keyframes jm-bar-in {
+  from { transform: scaleX(0); }
+}
+.jm-bar-fill {
+  transform-origin: left center;
+  animation: jm-bar-in 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jm-press, .jm-press:active { transition: none; transform: none; }
+  .jm-bar-fill { animation: none; }
+}

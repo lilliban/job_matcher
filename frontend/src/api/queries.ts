@@ -602,6 +602,39 @@ export function useMatchDocuments(matchId: string | null) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Match dal feed (copertura skill, senza LLM)                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface FeedMatch {
+  title: string | null;
+  company_name: string | null;
+  country_code: string | null;
+  source_url: string | null;
+  /** 1 = più in linea con il profilo, 5 = ruolo non classificato */
+  priority: number;
+  category: string;
+  /** 0–1; null se nel testo dell'annuncio non c'è nessuna skill riconoscibile */
+  coverage: number | null;
+  below_threshold: boolean;
+  matched_skills: string[];
+  missing_required: string[];
+  missing_nice: string[];
+  first_seen_at: string | null;
+}
+
+export function useFeedMatches(userId: string | null) {
+  return useQuery({
+    queryKey: ["users", userId, "feed-matches"],
+    queryFn: () => api<FeedMatch[]>("/api/matches/feed", { query: { user_id: userId } }),
+    enabled: !!userId,
+    // il feed cambia poche volte al giorno e il confronto è pesante
+    staleTime: 5 * 60 * 1000,
+    // un 503 "feed non disponibile" non si risolve riprovando subito
+    retry: false,
+  });
+}
+
+/* -------------------------------------------------------------------------- */
 /* Base documents                                                              */
 /* -------------------------------------------------------------------------- */
 

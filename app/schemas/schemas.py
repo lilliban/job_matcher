@@ -338,6 +338,25 @@ class MatchStatusUpdate(BaseModel):
     status: str = Field(description="new/saved/applied/interview/rejected/discarded")
 
 
+class FeedMatchOut(BaseModel):
+    """Un annuncio del feed confrontato con le skill del profilo
+    (app/services/pipeline.py) — non è un Match salvato nel database."""
+    title: Optional[str] = None
+    company_name: Optional[str] = None
+    country_code: Optional[str] = None
+    source_url: Optional[str] = None
+    priority: int
+    category: str
+    coverage: Optional[float] = Field(
+        default=None, description="0–1; None se nel testo non c'è nessuna skill riconoscibile"
+    )
+    below_threshold: bool
+    matched_skills: list[str] = []
+    missing_required: list[str] = []
+    missing_nice: list[str] = []
+    first_seen_at: Optional[str] = None
+
+
 # =====================================================================
 # Documents
 # =====================================================================

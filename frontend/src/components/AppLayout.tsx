@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: "/collections", num: "02", label: "Aziende" },
   { to: "/sessions", num: "03", label: "Ricerche" },
   { to: "/intelligence", num: "04", label: "Resoconto" },
+  { to: "/matches", num: "05", label: "I tuoi match" },
 ];
 
 export function AppLayout() {
