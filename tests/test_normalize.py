@@ -17,7 +17,7 @@ def test_BUG_permanent_contract_inglese():
     assert result == "contract" 
     
 def test_stage():
-    assert contract_type_norm("Stage curriculare") == "intership"
+    assert contract_type_norm("Stage curriculare") == "internship"
         
 def test_BUG_permanent_contract():
     assert contract_type_norm("Permanent contract, full time") == "contract"
