@@ -1,0 +1,260 @@
+"""Test della pipeline di matching: feed finto, database sqlite di prova,
+profilo finto. Nessuna chiamata di rete e nessun LLM."""
+import importlib
+import sqlite3
+import sys
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
+
+from app.services.feed_reader import POSTING_COLUMNS
+
+# Moduli che dipendono da sqlalchemy e vanno reimportati con quello vero.
+_ORM_MODULES = [
+    "app.database",
+    "app.models",
+    "app.models.domain",
+    "app.services.pipeline",
+]
+
+
+# ---------------------------------------------------------------------------
+# Fixture
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def orm():
+    """conftest.py sostituisce sqlalchemy con un MagicMock: qui serve quello
+    vero. Si reimportano i moduli ORM con sqlalchemy reale e a fine modulo
+    si ripristina sys.modules com'era, per non alterare gli altri test."""
+    saved = dict(sys.modules)
+    for name in list(sys.modules):
+        if name == "sqlalchemy" or name.startswith("sqlalchemy.") or name in _ORM_MODULES:
+            del sys.modules[name]
+    try:
+        sqlalchemy = importlib.import_module("sqlalchemy")
+        sa_orm = importlib.import_module("sqlalchemy.orm")
+        database = importlib.import_module("app.database")
+        models = importlib.import_module("app.models")
+        pipeline = importlib.import_module("app.services.pipeline")
+        yield SimpleNamespace(
+            create_engine=sqlalchemy.create_engine,
+            sessionmaker=sa_orm.sessionmaker,
+            Base=database.Base,
+            models=models,
+            pipeline=pipeline,
+        )
+    finally:
+        for name in list(sys.modules):
+            if name not in saved:
+                del sys.modules[name]
+        sys.modules.update(saved)
+        for name in _ORM_MODULES:
+            parent, _, child = name.rpartition(".")
+            if name in saved and parent in saved:
+                setattr(saved[parent], child, saved[name])
+
+
+@pytest.fixture
+def db(orm, tmp_path):
+    """Database applicativo di prova: sqlite su file, schema reale."""
+    engine = orm.create_engine(f"sqlite:///{(tmp_path / 'app.db').as_posix()}")
+    orm.Base.metadata.create_all(engine)
+    session = orm.sessionmaker(bind=engine)()
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def _add_user(orm, db, email: str, skills: list[str]) -> str:
+    user = orm.models.User(name="Profilo Finto", email=email)
+    for name in skills:
+        user.hard_skills.append(orm.models.UserHardSkill(name=name))
+    db.add(user)
+    db.commit()
+    return user.id
+
+
+def _make_feed(tmp_path, rows: list[dict]):
+    """Mini-feed con la stessa tabella postings letta da load_postings."""
+    path = tmp_path / "jobs.sqlite"
+    conn = sqlite3.connect(path)
+    cols_def = ", ".join(f"{c} TEXT" for c in POSTING_COLUMNS) + ", is_closed INTEGER DEFAULT 0"
+    conn.execute(f"CREATE TABLE postings ({cols_def})")
+    placeholders = ", ".join("?" for _ in range(len(POSTING_COLUMNS) + 1))
+    for row in rows:
+        vals = [row.get(c) for c in POSTING_COLUMNS] + [row.get("is_closed", 0)]
+        conn.execute(f"INSERT INTO postings VALUES ({placeholders})", vals)
+    conn.commit()
+    conn.close()
+    return path
+
+
+def _row(title: str, requirements: str | None, **extra) -> dict:
+    return {
+        "title": title,
+        "company_name": extra.pop("company_name", "Acme"),
+        "country_code": extra.pop("country_code", "DE"),
+        "requirements_raw": requirements,
+        "source_url": f"https://example.test/{title.replace(' ', '-').lower()}",
+        "first_seen_at": "2026-11-01T10:00:00",
+        **extra,
+    }
+
+
+FEED_ROWS = [
+    # priorità 1, copertura 100%
+    _row("Junior Data Analyst", "Python, SQL"),
+    # priorità 1, copertura 6/9: richieste python/sql/docker/kafka, gradita spark
+    _row("Junior Data Engineer", "Python, SQL, Docker, Kafka. Nice to have: Spark"),
+    # priorità 1, copertura 0 → sotto soglia
+    _row("Junior Data Scientist", "Rust, Scala, Kafka"),
+    # priorità 1, nessuna skill riconoscibile → copertura None, resta
+    _row("Junior Business Analyst", "We want a motivated team player."),
+    # priorità 3, copertura 100%
+    _row("Junior Software Engineer", "Python and Docker"),
+    # priorità 4, requirements_raw vuoto → si usa description
+    _row("Junior QA Tester", None, description="Python, SQL"),
+    # priorità 5, copertura 100% → resta
+    _row("Junior Platform Specialist", "Python, SQL"),
+    # priorità 5, copertura None → scartato
+    _row("Office Assistant", "Friendly person for our front desk."),
+    # scartati dal prefiltro: non tecnico, senior, paese fuori lista, chiuso
+    _row("Sales Representative", "Python, SQL"),
+    _row("Senior Data Engineer", "Python, SQL"),
+    _row("Junior Data Analyst US", "Python, SQL", country_code="US"),
+    _row("Junior Data Analyst Closed", "Python, SQL", is_closed=1),
+]
+
+USER_SKILLS = ["Python", "SQL", "Docker"]
+
+
+def _run(orm, db, tmp_path, user_id, rows=FEED_ROWS):
+    """run_matching con download_feed sostituito dal feed finto."""
+    feed = _make_feed(tmp_path, rows)
+    with patch.object(orm.pipeline, "download_feed", return_value=feed) as dl, \
+         patch("subprocess.run", side_effect=AssertionError("nessuna rete nei test")):
+        results = orm.pipeline.run_matching(user_id, db, tmp_path / "cache")
+    dl.assert_called_once_with(tmp_path / "cache")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Lettura del profilo
+# ---------------------------------------------------------------------------
+
+def test_load_user_skill_names_reads_profile(orm, db):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    assert sorted(orm.pipeline.load_user_skill_names(db, uid)) == sorted(USER_SKILLS)
+
+
+def test_load_user_skill_names_only_that_user(orm, db):
+    _add_user(orm, db, "a@example.test", ["Python"])
+    uid_b = _add_user(orm, db, "b@example.test", ["Rust"])
+    assert orm.pipeline.load_user_skill_names(db, uid_b) == ["Rust"]
+
+
+def test_unknown_user_raises(orm, db, tmp_path):
+    with pytest.raises(ValueError):
+        _run(orm, db, tmp_path, "non-esiste")
+
+
+# ---------------------------------------------------------------------------
+# run_matching
+# ---------------------------------------------------------------------------
+
+def test_run_matching_keeps_and_orders(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    results = _run(orm, db, tmp_path, uid)
+
+    assert [(r["title"], r["priority"], r["coverage"]) for r in results] == [
+        ("Junior Data Analyst", 1, 1.0),
+        ("Junior Data Engineer", 1, 0.667),
+        ("Junior Business Analyst", 1, None),
+        ("Junior Software Engineer", 3, 1.0),
+        ("Junior QA Tester", 4, 1.0),
+        ("Junior Platform Specialist", 5, 1.0),
+    ]
+
+
+def test_run_matching_result_fields(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    results = _run(orm, db, tmp_path, uid)
+    by_title = {r["title"]: r for r in results}
+
+    assert by_title["Junior Data Engineer"] == {
+        "title": "Junior Data Engineer",
+        "company_name": "Acme",
+        "country_code": "DE",
+        "source_url": "https://example.test/junior-data-engineer",
+        "priority": 1,
+        "category": "analytics_ai",
+        "coverage": 0.667,
+        "matched_skills": ["docker", "python", "sql"],
+        "missing_required": ["kafka"],
+        "missing_nice": ["spark"],
+        "first_seen_at": "2026-11-01T10:00:00",
+    }
+
+
+def test_below_threshold_is_dropped(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    titles = {r["title"] for r in _run(orm, db, tmp_path, uid)}
+    assert "Junior Data Scientist" not in titles
+
+
+def test_prefilter_discards_are_dropped(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    titles = {r["title"] for r in _run(orm, db, tmp_path, uid)}
+    assert not titles & {
+        "Sales Representative",
+        "Senior Data Engineer",
+        "Junior Data Analyst US",
+        "Junior Data Analyst Closed",
+    }
+
+
+def test_priority5_needs_measured_coverage(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    results = _run(orm, db, tmp_path, uid)
+    p5 = [r["title"] for r in results if r["priority"] == 5]
+    # "Office Assistant" ha copertura None: passerebbe la soglia, ma è priorità 5
+    assert p5 == ["Junior Platform Specialist"]
+
+
+def test_none_coverage_kept_for_classified_roles(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    results = _run(orm, db, tmp_path, uid)
+    ba = next(r for r in results if r["title"] == "Junior Business Analyst")
+    assert ba["coverage"] is None
+    assert ba["matched_skills"] == []
+
+
+def test_description_used_when_requirements_missing(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    results = _run(orm, db, tmp_path, uid)
+    qa = next(r for r in results if r["title"] == "Junior QA Tester")
+    assert qa["matched_skills"] == ["python", "sql"]
+
+
+def test_profile_without_skills_keeps_only_unmeasurable(orm, db, tmp_path):
+    uid = _add_user(orm, db, "vuoto@example.test", [])
+    results = _run(orm, db, tmp_path, uid)
+    assert [r["title"] for r in results] == ["Junior Business Analyst"]
+
+
+def test_empty_feed_returns_empty_list(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    assert _run(orm, db, tmp_path, uid, rows=[]) == []
+
+
+def test_no_llm_call(orm, db, tmp_path):
+    uid = _add_user(orm, db, "a@example.test", USER_SKILLS)
+    with patch(
+        "app.services.llm_gateway.LLMGateway.complete_json",
+        side_effect=AssertionError("la pipeline non deve usare l'LLM"),
+    ):
+        assert _run(orm, db, tmp_path, uid)
