@@ -30,7 +30,12 @@ JUNIOR_KEYWORDS = [
     "intern", "praktikum", "praktikant", "tirocinio", "tirocinante", "student",
     "praktikantin", "werkstudentin", "internships", "stagiaire", "praktika",
 ]
-SENIOR_KEYWORDS = ["senior", "lead", "principal", "head of", "manager", "director", "architect"]
+# Livelli che scartano sempre, anche se nel titolo c'è una parola junior
+# ("Staff Engineer, Intern Program", "Lead Werkstudent Betreuung").
+HARD_SENIOR_KEYWORDS = ["staff", "principal", "head", "lead", "director"]
+# Livelli che cedono a una parola junior vera nel titolo ("Junior/Senior Analyst").
+SOFT_SENIOR_KEYWORDS = ["senior", "sr", "manager", "architect"]
+SENIOR_KEYWORDS = HARD_SENIOR_KEYWORDS + SOFT_SENIOR_KEYWORDS
 
 
 def _keyword_re(keywords: list[str]) -> re.Pattern:
@@ -40,7 +45,8 @@ def _keyword_re(keywords: list[str]) -> re.Pattern:
 
 
 _JUNIOR_RE = _keyword_re(JUNIOR_KEYWORDS)
-_SENIOR_RE = _keyword_re(SENIOR_KEYWORDS)
+_HARD_SENIOR_RE = _keyword_re(HARD_SENIOR_KEYWORDS)
+_SOFT_SENIOR_RE = _keyword_re(SOFT_SENIOR_KEYWORDS)
 
 _YEARS_RE = re.compile(r'(\d+)\s*\+?\s*(?:years?|anni|jahre|ans)', re.IGNORECASE)
 _HISTORY_CONTEXT_RE = re.compile(
@@ -65,18 +71,25 @@ def seniority_check(
     """Ritorna (is_incompatible, motivo) in base al livello di seniority.
 
     Ordine di priorità:
-    1. Titolo junior  → keep (anche se il testo dice 5 anni)
-    2. Titolo senior  → scarta
-    3. min_years_exp dal DB (se fornito) → scarta se > 2
-    4. Regex sul testo come ripiego (solo se min_years_exp assente);
+    1. Titolo con staff/principal/head/lead/director → scarta sempre,
+       anche se contiene una parola junior
+    2. Titolo junior  → keep (anche se dice "senior" o il testo dice 5 anni).
+       Conta solo la parola intera nel titolo: "International" non è "intern".
+    3. Titolo senior/manager/architect → scarta
+    4. min_years_exp dal DB (se fornito) → scarta se > 2
+    5. Regex sul testo come ripiego (solo se min_years_exp assente);
        ignora valori > 15 e frasi di storia aziendale.
     """
     title_norm = (title or "").lower()
 
+    m = _HARD_SENIOR_RE.search(title_norm)
+    if m:
+        return True, f"titolo richiede livello senior+ ({m.group()})"
+
     if _JUNIOR_RE.search(title_norm):
         return False, ""
 
-    m = _SENIOR_RE.search(title_norm)
+    m = _SOFT_SENIOR_RE.search(title_norm)
     if m:
         return True, f"titolo richiede livello senior+ ({m.group()})"
 

@@ -11,9 +11,12 @@ from app.services.feed_reader import (
     download_feed,
     is_tech_role,
     load_postings,
+    posting_kind,
+    posting_region,
     prefilter,
     role_category,
 )
+from app.services.matcher import seniority_check
 
 
 # ---------------------------------------------------------------------------
@@ -127,11 +130,14 @@ def test_country_ok_empty_country():
     assert country_ok({}) is True
 
 
-def test_country_ok_remote_europe():
-    # remoto da paesi in EUROPE_COUNTRIES → tieni
-    assert country_ok({"country_code": "FR", "work_mode": "remote"}) is True
-    assert country_ok({"country_code": "GB", "work_mode": "remote"}) is True
-    assert country_ok({"country_code": "IT", "work_mode": "remote"}) is True
+def test_country_ok_remote_single_foreign_country_discarded():
+    # remoto ma legato a un solo paese non richiesto → è un lavoro in quel paese
+    assert country_ok({"country_code": "FR", "work_mode": "remote"}) is False
+    assert country_ok({"country_code": "GB", "work_mode": "remote",
+                       "location": "Remote, United Kingdom"}) is False
+    assert country_ok({"country_code": "ES", "work_mode": "remote",
+                       "location": "Remote, Spain"}) is False
+    assert country_ok({"country_code": "IT", "work_mode": "remote"}) is False
 
 
 def test_country_ok_remote_non_europe():
@@ -315,3 +321,248 @@ def test_blacklist_personal_data_override():
 def test_blacklist_medical_software_override():
     # "medical" colpisce ma "software" attiva l'override → tenuto
     assert role_category("Medical Device Software Engineer") is not None
+
+
+# ---------------------------------------------------------------------------
+# Priorità 1: serve un ruolo nel titolo, non basta la parola "AI" o "data"
+# ---------------------------------------------------------------------------
+
+def test_account_executive_with_ai_domain_is_not_tech():
+    # commerciale; "Leonardo.ai" è un nome a dominio, non un ruolo AI
+    title = "Account Executive, Leonardo.ai (m/w/d) – Munich (German-speaking)"
+    assert role_category(title) is None
+
+
+def test_hardware_engineer_with_ai_is_not_tech():
+    assert role_category("Hardware Systems Engineer - AI Hardware") is None
+
+
+def test_process_engineer_with_data_science_is_not_tech():
+    title = (
+        "PreMaster Programm Data Science and Process Control for Semiconductor "
+        "Manufacturing - Ingenieur:in für CVD Prozesse (w/m/div)"
+    )
+    assert role_category(title) is None
+    assert role_category("Ingenieur:in für CVD Prozesse") is None
+
+
+def test_staff_software_engineer_is_software_not_priority_1():
+    assert role_category("Staff Software Engineer") == ("software", 3)
+    # la parola-tema "AI" non scavalca il ruolo software
+    assert role_category("Staff Software Engineer, AI Agents (Python)") == ("software", 3)
+
+
+@pytest.mark.parametrize("title", [
+    "Account Executive, Leonardo.ai (m/w/d) – Munich (German-speaking)",
+    "Hardware Systems Engineer - AI Hardware",
+    "Ingenieur:in für CVD Prozesse",
+    "Staff Software Engineer",
+    "Staff Software Engineer, AI Agents (Python)",
+])
+def test_wrong_titles_never_reach_the_list_as_priority_1(title):
+    kept, _ = prefilter([{"title": title, "country_code": "DE", "requirements_raw": ""}])
+    assert [p for p in kept if p["_role_priority"] == 1] == []
+
+
+@pytest.mark.parametrize("title", [
+    "Sales Engineer AI",
+    "AI Recruiter",
+    "Marketing Manager Data & AI",
+    "Executive Assistant AI Office",
+    "FPGA Engineer Machine Learning",
+    "Process Engineer Data Science",
+])
+def test_topic_words_do_not_rescue_non_target_roles(title):
+    assert role_category(title) is None
+
+
+@pytest.mark.parametrize("title", [
+    "Business Analyst",
+    "Data Analyst Marketing",          # il ruolo è analyst: resta priorità 1
+    "Product Owner",
+    "Scrum Master",
+    "IT Consultant",
+    "BI Developer",
+    "Forecasting Specialist",
+    "Data Engineer",
+    "AI Engineer",
+    "Machine Learning Researcher",
+    "Research Scientist",
+    "Praktikum im Bereich Enterprise Data & AI",   # solo parola-tema, nessun altro ruolo
+    "Machine Learning Intern",
+    "Werkstudent KI",
+])
+def test_real_analytics_titles_stay_priority_1(title):
+    assert role_category(title) == ("analytics_ai", 1)
+
+
+def test_software_role_with_commercial_word_stays_software():
+    assert role_category("Software Engineer, Sales Tools") == ("software", 3)
+
+
+# ---------------------------------------------------------------------------
+# Seniority
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("title", [
+    "Staff Software Engineer",
+    "Principal Data Scientist",
+    "Head of Data",
+    "Head Data Analytics",
+    "Lead Data Analyst",
+    "Senior Data Analyst",
+    "Director AI Research",
+    "Staff AI Engineer",
+])
+def test_senior_titles_are_discarded(title):
+    incompatible, reason = seniority_check(title, "")
+    assert incompatible is True, title
+    assert reason
+
+
+@pytest.mark.parametrize("title", [
+    "Staff Engineer - Internship Program",
+    "Lead Data Analyst (Werkstudent Betreuung)",
+    "Principal AI Intern",
+    "Director Junior Talent AI",
+    "Head of Praktikum Program",
+])
+def test_hard_senior_wins_even_with_junior_or_ai_words(title):
+    assert seniority_check(title, "")[0] is True, title
+
+
+@pytest.mark.parametrize("title", [
+    "Junior/Senior Data Analyst",
+    "Stage Senior Data Team",
+    "Werkstudent Senior Management Reporting",
+    "Praktikum Senior Consulting",
+    "Internship - Senior Leadership Analytics",
+])
+def test_junior_word_wins_over_senior(title):
+    assert seniority_check(title, "") == (False, "")
+
+
+@pytest.mark.parametrize("title", [
+    "Senior International Data Analyst",   # "International" non è "intern"
+    "Senior Backstage Engineer",           # "Backstage" non è "stage"
+    "Senior Data Analyst",
+])
+def test_senior_needs_a_real_junior_word_to_be_kept(title):
+    assert seniority_check(title, "")[0] is True, title
+
+
+def test_prefilter_discards_staff_title_with_ai():
+    kept, discarded = prefilter([
+        {"title": "Staff Software Engineer, AI Agents (Python)", "country_code": "DE"},
+    ])
+    assert kept == []
+    assert "staff" in discarded[0]["_discard_reason"]
+
+
+# ---------------------------------------------------------------------------
+# Tesi e dottorati
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("title", [
+    "PhD - Safety Contracts for Physical AI",
+    "Ph.D. Position Machine Learning",
+    "Promotion - Foundation Models und Agentic AI",
+    "Doktorarbeit Data Science",
+    "Dissertation im Bereich KI",
+    "Master Thesis AI-based Sensorless Edrive Control",
+    "Bachelor Thesis Data Analytics",
+    "Masterarbeit KI-Agenten",
+    "Abschlussarbeit: KI-Agent für Maschinendiagnose",
+    "Thesis AI Agent for Automated Machine Diagnostics",
+])
+def test_posting_kind_thesis(title):
+    assert posting_kind(title) == "thesis"
+
+
+@pytest.mark.parametrize("title", [
+    "Junior Data Analyst",
+    "Praktikum Data & AI",
+    "Mandatory Internship AI Agent",
+    "Hypothesis Testing Analyst",     # "thesis" solo come parola intera
+    "",
+])
+def test_posting_kind_job(title):
+    assert posting_kind(title) == "job"
+
+
+def test_prefilter_marks_thesis_but_keeps_it():
+    kept, _ = prefilter([
+        {"title": "Master Thesis Machine Learning", "country_code": "DE"},
+        {"title": "Junior Data Analyst", "country_code": "DE"},
+    ])
+    assert {p["title"]: p["_kind"] for p in kept} == {
+        "Master Thesis Machine Learning": "thesis",
+        "Junior Data Analyst": "job",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Paesi
+# ---------------------------------------------------------------------------
+
+def test_region_allowed_countries():
+    assert posting_region({"country_code": "CH"}) == "CH"
+    assert posting_region({"country_code": "DE", "work_mode": "remote"}) == "DE"
+    assert posting_region({"country_code": "NL", "work_mode": "onsite"}) == "NL"
+
+
+@pytest.mark.parametrize("country", ["GB", "ES", "FR", "IT", "PL", "US"])
+def test_region_other_countries_discarded(country):
+    assert posting_region({"country_code": country}) is None
+    assert posting_region({"country_code": country, "work_mode": "hybrid",
+                           "location": "Europe"}) is None
+
+
+def test_region_remote_open_to_europe_is_kept():
+    assert posting_region({"country_code": "GB", "work_mode": "remote",
+                           "location": "Remote, Europe"}) == "remote_eu"
+    assert posting_region({"country_code": "FR", "work_mode": "remote",
+                           "location": "EMEA"}) == "remote_eu"
+    # elenco di sedi che comprende un paese richiesto
+    assert posting_region({"country_code": "GB", "work_mode": "remote",
+                           "location": "United Kingdom, Germany, The Netherlands"}) == "remote_eu"
+    # "Europa" detta nel titolo
+    assert posting_region({"country_code": "FR", "work_mode": "remote", "location": "France, Remote",
+                           "title": "ML Engineer - EMEA Remote"}) == "remote_eu"
+
+
+def test_region_remote_outside_europe_discarded_even_if_location_says_europe():
+    assert posting_region({"country_code": "US", "work_mode": "remote",
+                           "location": "Remote, Europe or US"}) is None
+
+
+def test_region_unknown_country_is_kept():
+    for location in [None, "", "Hybrid", "Remote", "Remote, Global", "In-Office", "N/A"]:
+        assert posting_region({"country_code": None, "location": location}) == "unknown", location
+    assert posting_region({}) == "unknown"
+
+
+def test_region_unknown_country_code_but_location_names_foreign_country():
+    for location in [
+        "United States (Remote)", "Remote US", "Canada (Remote)",
+        "Manila, Manila, Philippines", "London, United Kingdom", "Remote, Spain",
+    ]:
+        assert posting_region({"country_code": None, "location": location}) is None, location
+
+
+def test_region_unknown_country_with_europe_in_location_is_kept():
+    assert posting_region({"country_code": None, "location": "Europe or US"}) == "unknown"
+    assert posting_region({"country_code": None, "location": "EMEA"}) == "unknown"
+    # il pronome "us" non è il paese
+    assert posting_region({"country_code": None, "location": "Work with us remotely"}) == "unknown"
+
+
+def test_prefilter_sets_region():
+    kept, discarded = prefilter([
+        {"title": "Data Engineer", "country_code": "DE"},
+        {"title": "Data Engineer", "country_code": None},
+        {"title": "Data Engineer", "country_code": "GB", "work_mode": "remote", "location": "Europe"},
+        {"title": "Data Engineer", "country_code": "GB", "work_mode": "remote", "location": "UK"},
+    ])
+    assert [p["_region"] for p in kept] == ["DE", "unknown", "remote_eu"]
+    assert discarded[0]["_discard_reason"] == "paese non in lista (GB)"

@@ -40,8 +40,9 @@ def feed_matches(
     db: Session = Depends(get_db),
 ):
     """Annunci del feed compatibili con le skill del profilo, senza LLM.
-    Ordinati per priorità, poi sopra soglia prima di sotto soglia, poi
-    copertura decrescente."""
+    Ordinati per priorità; dentro la priorità prima le coperture misurate
+    (sopra soglia, poi sotto soglia), in coda quelle non misurabili.
+    Tesi e dottorati sono inclusi con kind="thesis"."""
     if not db.get(models.User, user_id):
         raise HTTPException(404, "Utente non trovato")
     try:

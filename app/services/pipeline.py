@@ -42,6 +42,8 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
     - Priorità 5 (ruolo non classificato): resta solo se la copertura è
       misurata e maggiore di zero — senza nessun segnale dal titolo, serve
       almeno un segnale dalle skill.
+    - Tesi e dottorati restano nel risultato con kind="thesis": è la pagina
+      a tenerli fuori dalla lista principale.
     """
     kept, _discarded = prefilter(postings)
 
@@ -59,6 +61,10 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
             "title": p.get("title"),
             "company_name": p.get("company_name"),
             "country_code": p.get("country_code"),
+            # CH/DE/NL, "remote_eu" (remoto aperto all'Europa) o "unknown"
+            "region": p["_region"],
+            # "job" oppure "thesis" (tesi e dottorati: fuori dalla lista principale)
+            "kind": p["_kind"],
             "source_url": p.get("source_url"),
             "priority": priority,
             "category": p["_role_category"],
@@ -72,14 +78,14 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
             "first_seen_at": p.get("first_seen_at"),
         })
 
-    # Priorità crescente, poi sopra soglia prima di sotto soglia, poi
-    # copertura decrescente. La copertura None (nessuna skill riconosciuta
-    # nel testo) non è sotto soglia: va dopo le coperture misurate ≥ soglia
-    # e prima degli annunci below_threshold.
+    # Priorità crescente; dentro la priorità prima le coperture misurate
+    # (sopra soglia, poi sotto soglia, in ordine decrescente) e in coda gli
+    # annunci con copertura None: senza skill riconosciute nel testo non
+    # sappiamo dire nulla, quindi non passano davanti a chi è misurato.
     results.sort(key=lambda r: (
         r["priority"],
-        r["below_threshold"],
         r["coverage"] is None,
+        r["below_threshold"],
         -(r["coverage"] or 0.0),
     ))
     return results

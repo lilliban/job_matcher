@@ -53,6 +53,8 @@ def test_feed_returns_matches_for_user(orm, api, add_user, make_feed):
             "title": "Junior Data Analyst",
             "company_name": "Acme",
             "country_code": "NL",
+            "region": "NL",
+            "kind": "job",
             "source_url": "https://example.test/da",
             "priority": 1,
             "category": "analytics_ai",
@@ -67,6 +69,8 @@ def test_feed_returns_matches_for_user(orm, api, add_user, make_feed):
             "title": "Junior Data Scientist",
             "company_name": "Acme",
             "country_code": "DE",
+            "region": "DE",
+            "kind": "job",
             "source_url": "https://example.test/ds",
             "priority": 1,
             "category": "analytics_ai",
@@ -152,3 +156,25 @@ def test_gh_missing_and_no_cache_is_503(api, add_user, tmp_path):
         res = api.get("/api/matches/feed", params={"user_id": uid})
     assert res.status_code == 503
     assert res.json()["detail"] == api.matches.FEED_UNAVAILABLE
+
+
+def test_feed_marks_thesis_and_unknown_country(orm, api, add_user, make_feed):
+    uid = add_user("a@example.test", ["Python", "SQL"])
+    feed = make_feed(FEED_ROWS + [
+        {"title": "Master Thesis Machine Learning", "company_name": "Acme", "country_code": "DE",
+         "requirements_raw": "Python, SQL"},
+        {"title": "Junior Business Analyst", "company_name": "Acme", "country_code": None,
+         "location": "Hybrid", "requirements_raw": "Python, SQL"},
+        {"title": "Junior BI Analyst", "company_name": "Acme", "country_code": "GB",
+         "work_mode": "remote", "location": "Remote, United Kingdom", "requirements_raw": "Python, SQL"},
+    ])
+    with patch.object(orm.pipeline, "download_feed", return_value=feed):
+        res = api.get("/api/matches/feed", params={"user_id": uid})
+
+    assert res.status_code == 200
+    by_title = {m["title"]: m for m in res.json()}
+    assert by_title["Master Thesis Machine Learning"]["kind"] == "thesis"
+    assert by_title["Junior Data Analyst"]["kind"] == "job"
+    assert by_title["Junior Business Analyst"]["region"] == "unknown"
+    assert by_title["Junior Business Analyst"]["country_code"] is None
+    assert "Junior BI Analyst" not in by_title

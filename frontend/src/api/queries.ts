@@ -609,6 +609,10 @@ export interface FeedMatch {
   title: string | null;
   company_name: string | null;
   country_code: string | null;
+  /** "CH" | "DE" | "NL", "remote_eu" (remoto aperto all'Europa) o "unknown" */
+  region: string;
+  /** "thesis" per tesi e dottorati: fuori dalla lista principale */
+  kind: "job" | "thesis";
   source_url: string | null;
   /** 1 = più in linea con il profilo, 5 = ruolo non classificato */
   priority: number;

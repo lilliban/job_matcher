@@ -50,6 +50,20 @@ FEED_ROWS = [
     _row("Junior Data Analyst Closed", "Python, SQL", is_closed=1),
 ]
 
+# Annunci con paese, modalità e tipo particolari
+EXTRA_ROWS = [
+    _row("Master Thesis Machine Learning", "Python, SQL"),
+    _row("PhD - Data Science for Robots", "Python, Kafka"),
+    _row("Junior Data Analyst Unknown", "Python, SQL", country_code=None, location="Hybrid"),
+    _row("Junior Data Analyst Europe", "Python, SQL", country_code="GB",
+         work_mode="remote", location="Remote, Europe"),
+    _row("Junior Data Analyst London", "Python, SQL", country_code="GB",
+         work_mode="remote", location="Remote, United Kingdom"),
+    _row("Junior Data Analyst Madrid", "Python, SQL", country_code="ES", work_mode="hybrid"),
+    _row("Staff Software Engineer, AI Agents", "Python, SQL"),
+    _row("Account Executive, Leonardo.ai", "Python, SQL"),
+]
+
 USER_SKILLS = ["Python", "SQL", "Docker"]
 
 
@@ -100,9 +114,10 @@ def test_run_matching_keeps_and_orders(orm, add_user, run):
     assert got == [
         ("Junior Data Analyst", 1, False, 1.0),
         ("Junior Data Engineer", 1, False, 0.667),
-        ("Junior Business Analyst", 1, False, None),
         ("Junior BI Analyst", 1, True, 0.5),
         ("Junior Data Scientist", 1, True, 0.0),
+        # copertura non misurabile: in coda alla sua priorità
+        ("Junior Business Analyst", 1, False, None),
         ("Junior Software Engineer", 3, False, 1.0),
         ("Junior Backend Developer", 3, True, 0.25),
         ("Junior QA Tester", 4, False, 1.0),
@@ -120,6 +135,8 @@ def test_run_matching_result_fields(orm, add_user, run):
         "title": "Junior Data Engineer",
         "company_name": "Acme",
         "country_code": "DE",
+        "region": "DE",
+        "kind": "job",
         "source_url": "https://example.test/junior-data-engineer",
         "priority": 1,
         "category": "analytics_ai",
@@ -156,8 +173,12 @@ def test_below_threshold_false_at_or_above_threshold(orm, add_user, run):
 def test_below_threshold_sorted_after_others_within_priority(orm, add_user, run):
     uid = add_user("a@example.test", USER_SKILLS)
     results = run(uid)
+    # tra le coperture misurate; quelle non misurabili stanno in coda
     for priority in {r["priority"] for r in results}:
-        flags = [r["below_threshold"] for r in results if r["priority"] == priority]
+        flags = [
+            r["below_threshold"] for r in results
+            if r["priority"] == priority and r["coverage"] is not None
+        ]
         assert flags == sorted(flags), f"priorità {priority}: {flags}"
 
 
@@ -208,11 +229,11 @@ def test_profile_without_skills(orm, add_user, run):
     results = run(uid)
 
     assert [(r["title"], r["priority"], r["below_threshold"]) for r in results] == [
-        ("Junior Business Analyst", 1, False),
         ("Junior Data Analyst", 1, True),
         ("Junior Data Engineer", 1, True),
         ("Junior Data Scientist", 1, True),
         ("Junior BI Analyst", 1, True),
+        ("Junior Business Analyst", 1, False),
         ("Junior Backend Developer", 3, True),
         ("Junior Software Engineer", 3, True),
         ("Junior QA Tester", 4, True),
@@ -231,3 +252,50 @@ def test_no_llm_call(orm, add_user, run):
         side_effect=AssertionError("la pipeline non deve usare l'LLM"),
     ):
         assert run(uid)
+
+
+# ---------------------------------------------------------------------------
+# Copertura non misurabile, tesi, paesi
+# ---------------------------------------------------------------------------
+
+def test_unmeasurable_coverage_sorted_after_measured_in_same_priority(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    results = run(uid)
+    for priority in {r["priority"] for r in results}:
+        unmeasured = [r["coverage"] is None for r in results if r["priority"] == priority]
+        assert unmeasured == sorted(unmeasured), f"priorità {priority}: {unmeasured}"
+    p1 = [r["title"] for r in results if r["priority"] == 1]
+    assert p1[-1] == "Junior Business Analyst"
+
+
+def test_thesis_is_kept_and_marked(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    by_title = {r["title"]: r for r in run(uid, rows=FEED_ROWS + EXTRA_ROWS)}
+    assert by_title["Master Thesis Machine Learning"]["kind"] == "thesis"
+    assert by_title["PhD - Data Science for Robots"]["kind"] == "thesis"
+    assert by_title["Junior Data Analyst"]["kind"] == "job"
+    jobs = [r for r in by_title.values() if r["kind"] == "job"]
+    assert not any("Thesis" in r["title"] or "PhD" in r["title"] for r in jobs)
+
+
+def test_regions_in_results(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    by_title = {r["title"]: r for r in run(uid, rows=FEED_ROWS + EXTRA_ROWS)}
+
+    unknown = by_title["Junior Data Analyst Unknown"]
+    assert unknown["country_code"] is None
+    assert unknown["region"] == "unknown"
+
+    assert by_title["Junior Data Analyst Europe"]["region"] == "remote_eu"
+    assert by_title["Junior Data Analyst"]["region"] == "DE"
+    # Regno Unito e Spagna fuori, anche se da remoto
+    assert "Junior Data Analyst London" not in by_title
+    assert "Junior Data Analyst Madrid" not in by_title
+    assert {r["region"] for r in by_title.values()} <= {"CH", "DE", "NL", "remote_eu", "unknown"}
+
+
+def test_wrong_roles_are_not_in_results(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    titles = {r["title"] for r in run(uid, rows=FEED_ROWS + EXTRA_ROWS)}
+    assert "Staff Software Engineer, AI Agents" not in titles
+    assert "Account Executive, Leonardo.ai" not in titles

@@ -24,7 +24,10 @@ const SORT_LABEL: Record<SortMode, string> = {
   coverage_asc: "Copertura: dalla più bassa",
 };
 
-const NO_COUNTRY = "__none";
+// Valori di FeedMatch.region che non sono un codice paese
+const REGION_REMOTE_EU = "remote_eu";
+const REGION_UNKNOWN = "unknown";
+const NO_COUNTRY_LABEL = "Paese non indicato";
 const PAGE_SIZE = 30;
 
 const regionNames =
@@ -32,13 +35,26 @@ const regionNames =
     ? new Intl.DisplayNames(["it"], { type: "region" })
     : null;
 
-function countryName(code: string | null): string {
-  if (!code) return "Paese non indicato";
+function countryName(code: string): string {
   try {
     return regionNames?.of(code.toUpperCase()) ?? code;
   } catch {
     return code;
   }
+}
+
+/** Etichetta del luogo: paese, "Remoto in Europa" o "Paese non indicato". */
+function regionLabel(region: string): string {
+  if (region === REGION_UNKNOWN) return NO_COUNTRY_LABEL;
+  if (region === REGION_REMOTE_EU) return "Remoto in Europa";
+  return countryName(region);
+}
+
+/** Nel menu: prima i paesi in ordine alfabetico, poi remoto, poi non indicato. */
+function regionRank(region: string): number {
+  if (region === REGION_UNKNOWN) return 2;
+  if (region === REGION_REMOTE_EU) return 1;
+  return 0;
 }
 
 function seenLabel(iso: string | null): string | null {
@@ -63,9 +79,17 @@ export function MatchesView() {
   const [priority, setPriority] = useState<number | null>(null);
   const [country, setCountry] = useState<string>("");
   const [sort, setSort] = useState<SortMode>("default");
+  const [showThesis, setShowThesis] = useState(false);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
-  const matches = useMemo(() => feed.data ?? [], [feed.data]);
+  const all = useMemo(() => feed.data ?? [], [feed.data]);
+  const thesisCount = useMemo(() => all.filter((m) => m.kind === "thesis").length, [all]);
+  // Tesi e dottorati non sono candidature da lavoro: restano fuori finché
+  // non si accende il filtro. Conteggi e menu si calcolano su questa lista.
+  const matches = useMemo(
+    () => (showThesis ? all : all.filter((m) => m.kind !== "thesis")),
+    [all, showThesis],
+  );
 
   const priorities = useMemo(() => {
     const counts = new Map<number, { count: number; category: string }>();
@@ -78,33 +102,40 @@ export function MatchesView() {
   }, [matches]);
 
   const countries = useMemo(() => {
-    const codes = new Set(matches.map((m) => m.country_code ?? NO_COUNTRY));
-    return [...codes]
-      .map((code) => ({ code, name: countryName(code === NO_COUNTRY ? null : code) }))
-      .sort((a, b) =>
-        a.code === NO_COUNTRY ? 1 : b.code === NO_COUNTRY ? -1 : a.name.localeCompare(b.name, "it"),
+    const counts = new Map<string, number>();
+    for (const m of matches) counts.set(m.region, (counts.get(m.region) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([code, count]) => ({ code, count, name: regionLabel(code) }))
+      .sort(
+        (a, b) => regionRank(a.code) - regionRank(b.code) || a.name.localeCompare(b.name, "it"),
       );
   }, [matches]);
+
+  // Un filtro rimasto su un valore che non c'è più (per esempio dopo aver
+  // spento "Tesi e dottorati") vale come "nessun filtro".
+  const activeCountry = countries.some((c) => c.code === country) ? country : "";
+  const activePriority = priorities.some(([p]) => p === priority) ? priority : null;
 
   const filtered = useMemo(() => {
     const list = matches.filter(
       (m) =>
-        (priority == null || m.priority === priority) &&
-        (country === "" || (m.country_code ?? NO_COUNTRY) === country),
+        (activePriority == null || m.priority === activePriority) &&
+        (activeCountry === "" || m.region === activeCountry),
     );
     // "default" è l'ordine del server: priorità, sopra soglia, copertura
     if (sort === "coverage_desc") return [...list].sort((a, b) => byCoverage(a, b, -1));
     if (sort === "coverage_asc") return [...list].sort((a, b) => byCoverage(a, b, 1));
     return list;
-  }, [matches, priority, country, sort]);
+  }, [matches, activePriority, activeCountry, sort]);
 
   const belowCount = useMemo(() => filtered.filter((m) => m.below_threshold).length, [filtered]);
-  const hasFilters = priority != null || country !== "";
+  const hasFilters = activePriority != null || activeCountry !== "";
 
   // Ogni cambio di filtro o ordine riparte dalla prima pagina.
   const changePriority = (p: number | null) => { setPriority(p); setVisible(PAGE_SIZE); };
   const changeCountry = (c: string) => { setCountry(c); setVisible(PAGE_SIZE); };
   const changeSort = (s: SortMode) => { setSort(s); setVisible(PAGE_SIZE); };
+  const toggleThesis = () => { setShowThesis((v) => !v); setVisible(PAGE_SIZE); };
   const resetFilters = () => { setPriority(null); setCountry(""); setVisible(PAGE_SIZE); };
 
   if (isBooting) return <Shell><Notice>Caricamento…</Notice></Shell>;
@@ -151,7 +182,7 @@ export function MatchesView() {
     );
   }
 
-  if (matches.length === 0) {
+  if (all.length === 0) {
     return (
       <Shell>
         <div className="mt-10">
@@ -180,28 +211,40 @@ export function MatchesView() {
         <div className="min-w-0">
           <FilterLabel id="filtro-priorita">Priorità</FilterLabel>
           <div role="group" aria-labelledby="filtro-priorita" className="mt-2 flex flex-wrap gap-2">
-            <Chip active={priority == null} onClick={() => changePriority(null)}>
+            <Chip active={activePriority == null} onClick={() => changePriority(null)}>
               Tutte
               <ChipCount>{matches.length}</ChipCount>
             </Chip>
             {priorities.map(([p, { count, category }]) => (
-              <Chip key={p} active={priority === p} onClick={() => changePriority(p)}>
+              <Chip key={p} active={activePriority === p} onClick={() => changePriority(p)}>
                 <span className="font-mono text-xs opacity-70">{p}</span>
                 {CATEGORY_LABEL[category] ?? category}
                 <ChipCount>{count}</ChipCount>
               </Chip>
             ))}
           </div>
+
+          {thesisCount > 0 && (
+            <div className="mt-4">
+              <FilterLabel id="filtro-tipo">Mostra anche</FilterLabel>
+              <div role="group" aria-labelledby="filtro-tipo" className="mt-2 flex flex-wrap gap-2">
+                <Chip active={showThesis} onClick={toggleThesis}>
+                  Tesi e dottorati
+                  <ChipCount>{thesisCount}</ChipCount>
+                </Chip>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <FilterLabel>Paese</FilterLabel>
-            <Select value={country} onChange={changeCountry}>
-              <option value="">Tutti i paesi</option>
+            <Select value={activeCountry} onChange={changeCountry}>
+              <option value="">Tutti i paesi ({matches.length})</option>
               {countries.map((c) => (
                 <option key={c.code} value={c.code}>
-                  {c.name}
+                  {c.name} ({c.count})
                 </option>
               ))}
             </Select>
@@ -362,8 +405,7 @@ function Select({
 function MatchCard({ m }: { m: FeedMatch }) {
   const pct = m.coverage == null ? null : Math.round(m.coverage * 100);
   const seen = seenLabel(m.first_seen_at);
-  const noSkills =
-    m.matched_skills.length === 0 && m.missing_required.length === 0 && m.missing_nice.length === 0;
+  const unknownCountry = m.region === REGION_UNKNOWN;
 
   return (
     <article className="flex h-full flex-col rounded-2xl border border-line bg-paper-2 p-5 sm:p-6">
@@ -371,6 +413,11 @@ function MatchCard({ m }: { m: FeedMatch }) {
         <p className="font-mono text-xs text-ink-faint">
           Priorità {m.priority} · {CATEGORY_LABEL[m.category] ?? m.category}
         </p>
+        {m.kind === "thesis" && (
+          <span className="rounded-full border border-line-hard px-2.5 py-1 text-xs font-medium text-ink-soft">
+            Tesi o dottorato
+          </span>
+        )}
         {m.below_threshold && (
           <span className="ml-auto rounded-full bg-warn-wash px-2.5 py-1 text-xs font-medium text-warn">
             Sotto soglia
@@ -381,45 +428,53 @@ function MatchCard({ m }: { m: FeedMatch }) {
       <h2 className="mt-3 text-xl font-medium leading-snug tracking-[-0.015em] [overflow-wrap:anywhere]">
         {m.title ?? "Annuncio senza titolo"}
       </h2>
-      <p className="mt-1 text-[15px] text-ink-soft [overflow-wrap:anywhere]">
-        {m.company_name ?? "Azienda non indicata"} · {countryName(m.country_code)}
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-ink-soft [overflow-wrap:anywhere]">
+        <span>
+          {m.company_name ?? "Azienda non indicata"}
+          {!unknownCountry && ` · ${regionLabel(m.region)}`}
+        </span>
+        {unknownCountry && (
+          <span className="rounded-full border border-dashed border-line-hard px-2 py-0.5 text-xs text-ink-faint">
+            {NO_COUNTRY_LABEL}
+          </span>
+        )}
       </p>
 
-      <div className="mt-5">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-xs font-medium text-ink-faint">Copertura</span>
-          <span className="font-mono text-2xl leading-none tracking-[-0.02em]">
-            {pct == null ? "n/d" : `${pct}%`}
-          </span>
-        </div>
-        <div
-          role="progressbar"
-          aria-label="Copertura delle skill richieste"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={pct ?? undefined}
-          aria-valuetext={pct == null ? "Non misurabile" : `${pct}%`}
-          className="mt-2 h-2 overflow-hidden rounded-full bg-accent-wash"
-        >
-          {pct != null && pct > 0 && (
-            <div
-              className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-warn" : "bg-accent")}
-              style={{ width: `${pct}%` }}
-            />
-          )}
-        </div>
-      </div>
-
-      {noSkills ? (
-        <p className="mt-5 text-sm text-ink-faint">
-          Nel testo dell'annuncio non ho riconosciuto skill: la copertura non è misurabile.
-        </p>
+      {pct == null ? (
+        // Niente barra e niente riquadro: senza skill riconosciute nel testo
+        // (o senza testo nel feed) basta dirlo sottovoce.
+        <p className="mt-4 text-xs text-ink-faint">Copertura non misurabile</p>
       ) : (
-        <dl className="mt-5 space-y-3">
-          <SkillRow label="Hai" skills={m.matched_skills} tone="have" />
-          <SkillRow label="Ti mancano" skills={m.missing_required} tone="missing" />
-          <SkillRow label="Gradite, non le hai" skills={m.missing_nice} tone="nice" />
-        </dl>
+        <>
+          <div className="mt-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-medium text-ink-faint">Copertura</span>
+              <span className="font-mono text-2xl leading-none tracking-[-0.02em]">{pct}%</span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Copertura delle skill richieste"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={pct}
+              aria-valuetext={`${pct}%`}
+              className="mt-2 h-2 overflow-hidden rounded-full bg-accent-wash"
+            >
+              {pct > 0 && (
+                <div
+                  className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-warn" : "bg-accent")}
+                  style={{ width: `${pct}%` }}
+                />
+              )}
+            </div>
+          </div>
+
+          <dl className="mt-5 space-y-3">
+            <SkillRow label="Hai" skills={m.matched_skills} tone="have" />
+            <SkillRow label="Ti mancano" skills={m.missing_required} tone="missing" />
+            <SkillRow label="Gradite, non le hai" skills={m.missing_nice} tone="nice" />
+          </dl>
+        </>
       )}
 
       <div className="mt-auto flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">

@@ -36,9 +36,10 @@ by_priority: dict[int, list[dict]] = defaultdict(list)
 for p in kept:
     by_priority[p["_role_priority"]].append(p)
 
-LABEL = {1: "analytics_ai", 2: "consulting_security", 3: "software", 4: "support_qa"}
+LABEL = {1: "analytics_ai", 2: "consulting_security", 3: "software", 4: "support_qa", 5: "unclassified"}
 for pri in sorted(by_priority):
     items = by_priority[pri]
+    n_sample = 30 if pri == 5 else 5
     print(f"\n  Priorità {pri} — {LABEL.get(pri, '?')} : {len(items)} annunci")
-    for p in random.sample(items, min(5, len(items))):
+    for p in random.sample(items, min(n_sample, len(items))):
         print(f"    [{p.get('country_code') or '??'}]  {p['title']}  —  {p['company_name']}")

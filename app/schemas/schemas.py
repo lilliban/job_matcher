@@ -344,6 +344,11 @@ class FeedMatchOut(BaseModel):
     title: Optional[str] = None
     company_name: Optional[str] = None
     country_code: Optional[str] = None
+    region: str = Field(
+        default="unknown",
+        description='"CH", "DE", "NL", "remote_eu" (remoto aperto a tutta Europa) o "unknown"',
+    )
+    kind: str = Field(default="job", description='"job" oppure "thesis" (tesi e dottorati)')
     source_url: Optional[str] = None
     priority: int
     category: str

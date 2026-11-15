@@ -169,3 +169,129 @@ def test_passes_threshold_above():
 def test_passes_threshold_below():
     assert passes_threshold({"percentage": 0.4}) is False
     assert passes_threshold({"percentage": 0.0}) is False
+
+
+# ---------------------------------------------------------------------------
+# Sinonimi tedeschi e italiani
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("text, skill", [
+    ("Erfahrung in der Datenanalyse", "data analysis"),
+    ("Kenntnisse in Datenbanken", "database"),
+    ("Du übernimmst die Anforderungsanalyse", "requirements engineering"),
+    ("Erste Erfahrung im Projektmanagement", "project management"),
+    ("Grundkenntnisse in der Programmierung", "programming"),
+    ("Interesse an maschinellem Lernen", "machine learning"),
+    ("Begeisterung für Künstliche Intelligenz", "machine learning"),
+    ("Unterstützung im Berichtswesen", "reporting"),
+    ("Aufbau des Reporting", "reporting"),
+    ("Arbeiten nach Scrum", "agile"),
+    ("Erfahrung mit agilen Methoden", "agile"),
+    ("SAP-Kenntnisse", "sap"),
+    ("Sehr gute Excel-Kenntnisse", "excel"),
+    ("Gute Excelkenntnisse", "excel"),
+    ("SQL-Kenntnisse", "sql"),
+    ("Python-Kenntnisse", "python"),
+    ("Erfahrung mit Power BI", "power bi"),
+    ("Erfahrung mit Tableau", "tableau"),
+    ("Esperienza in analisi dei dati", "data analysis"),
+    ("Conoscenza delle basi di dati", "database"),
+    ("Analisi dei requisiti con il cliente", "requirements engineering"),
+    ("Gestione progetti", "project management"),
+    ("Basi di programmazione", "programming"),
+    ("Interesse per l'apprendimento automatico", "machine learning"),
+    ("Produzione di reportistica", "reporting"),
+])
+def test_german_and_italian_synonyms(text, skill):
+    assert skill in extract_skills(text)["required"]
+
+
+def test_german_posting_gets_a_measured_coverage():
+    text = (
+        "Dein Profil\n"
+        "- Studium der Wirtschaftsinformatik\n"
+        "- Erfahrung in der Datenanalyse und mit Datenbanken\n"
+        "- Sehr gute Excel-Kenntnisse, SQL von Vorteil\n"
+    )
+    result = compute_coverage(["Excel", "SQL"], text)
+    assert result["percentage"] is not None
+    assert "excel" in result["matched"]
+    assert "data analysis" in result["missing_required"]
+
+
+def test_specific_skill_implies_generic_one():
+    # chi ha Python sa programmare, chi ha SQL conosce i database
+    result = compute_coverage(["Python", "MySQL"], "Programmierung und Datenbanken")
+    assert result["percentage"] == pytest.approx(1.0)
+    assert result["matched"] == ["database", "programming"]
+    # senza un linguaggio nel profilo, "programming" resta mancante
+    assert compute_coverage(["Excel"], "Programmierung")["missing_required"] == ["programming"]
+
+
+# ---------------------------------------------------------------------------
+# Richieste vs gradite
+# ---------------------------------------------------------------------------
+
+def test_ml_required_is_not_nice_when_ideally_opens_the_requirements():
+    # caso reale: "Ideally, you bring:" prima dell'elenco dei requisiti
+    text = (
+        "We are looking for engineers with GitHub contributions. Ideally, you bring:\n\n"
+        " - Experience deploying and serving ML models in production.\n\n"
+        " - Strong Python skills.\n"
+    )
+    result = extract_skills(text)
+    assert "machine learning" in result["required"]
+    assert "python" in result["required"]
+    assert result["nice"] == []
+
+
+def test_ml_in_requirements_and_in_nice_section_is_required():
+    text = (
+        "Requirements\n"
+        "- Solid machine learning background\n"
+        "Nice to have:\n"
+        "- Machine learning in production, Kubernetes\n"
+    )
+    result = extract_skills(text)
+    assert "machine learning" in result["required"]
+    assert result["nice"] == ["kubernetes"]
+
+
+def test_requirements_after_a_nice_section_are_required():
+    text = (
+        "Nice to have:\n"
+        "- Kubernetes\n"
+        "Requirements:\n"
+        "- Machine learning and Python\n"
+    )
+    result = extract_skills(text)
+    assert result["required"] == ["machine learning", "python"]
+    assert result["nice"] == ["kubernetes"]
+
+
+def test_inline_marker_only_affects_its_sentence():
+    text = "- Python and SQL.\n- Tableau is a plus.\n- Machine learning for forecasting.\n"
+    result = extract_skills(text)
+    assert result["required"] == ["machine learning", "python", "sql"]
+    assert result["nice"] == ["tableau"]
+
+
+def test_ideally_only_affects_what_follows_in_the_sentence():
+    text = "- Experience with machine learning pipelines, ideally with Kafka.\n- SQL\n"
+    result = extract_skills(text)
+    assert result["required"] == ["machine learning", "sql"]
+    assert result["nice"] == ["kafka"]
+
+
+def test_german_nice_section():
+    text = (
+        "Dein Profil\n"
+        "- Erfahrung mit Python\n"
+        "Wünschenswerte Qualifikationen:\n"
+        "- Erfahrung mit Datenbanken\n"
+        "Wir bieten\n"
+        "- Arbeiten mit SAP\n"
+    )
+    result = extract_skills(text)
+    assert result["required"] == ["python", "sap"]
+    assert result["nice"] == ["database"]

@@ -105,6 +105,64 @@ _BLACKLIST_RE = re.compile(
 )
 _BLACKLIST_OVERRIDE_RE = re.compile(r"\b(?:software|data|ai|it)\b", re.IGNORECASE)
 
+# Ruoli fuori bersaglio: commerciale, hardware, ingegneria di processo.
+# Con queste parole nel titolo, "AI" o "data" da sole non bastano: né per la
+# priorità 1 né per salvare il titolo dalla lista nera ("Account Executive,
+# Leonardo.ai", "Hardware Systems Engineer - AI Hardware").
+_NON_TARGET_RE = re.compile(
+    # commerciale
+    r"\baccount\b"             # Account Executive / Manager / Development Rep
+    r"|\bsales\b"
+    r"|\bvertrieb"
+    r"|\bverkauf"
+    r"|\bexecutive\b"
+    r"|\brecruit"
+    r"|\bmarketing\b"
+    r"|\bseo\b"
+    r"|\bbusiness\s+development\b"
+    r"|\bcustomer\s+success\b"
+    # hardware
+    r"|\bhardware\b"
+    r"|\basic\b"
+    r"|\bfpga\b"
+    # ingegneria di processo
+    r"|\bprocess\s+(?:engineer\w*|control|technolog\w*)"
+    r"|\bprozess(?:ingenieur|technik|technolog)\w*"
+    r"|\bverfahrens\w*"
+    r"|\bcvd\b",
+    re.IGNORECASE,
+)
+
+# Parole-tema: dicono l'argomento, non il ruolo. Valgono la priorità 1 solo
+# se il titolo non indica un altro ruolo (commerciale, hardware, processo,
+# o una categoria 2–4 come "Software Engineer, AI Agents").
+# (?<![.\w]) evita i nomi a dominio: "Leonardo.ai" non è un ruolo AI.
+_P1_TOPIC_RE = re.compile(
+    r"(?<![.\w])ai\b"
+    r"|\bki\b"
+    r"|\bml\b"
+    r"|\b(?:machine|reinforcement|deep)\s+learning\b"
+    r"|\bdata\s+science\b",
+    re.IGNORECASE,
+)
+
+# Tesi e dottorati: non sono candidature da lavoro (vedi posting_kind).
+_THESIS_RE = re.compile(
+    r"\bph\.?\s?d\b"
+    r"|\bpromotion\b"
+    r"|\bdoktorarbeit\w*"
+    r"|\bdoktorand\w*"
+    r"|\bdissertation\b"
+    r"|\bdoctoral\b"
+    r"|\bthesis\b"
+    r"|\b(?:master|bachelor)thesis\b"
+    r"|\b(?:master|bachelor|abschluss|diplom)arbeit\w*"
+    r"|\bafstudeer\w*"
+    r"|\btesi\b"
+    r"|\bdottorato\b",
+    re.IGNORECASE,
+)
+
 # "product manager" vale solo se il titolo contiene junior/associate/assistant
 _PM_RE = re.compile(r"\bproduct\s+manager\b", re.IGNORECASE)
 _PM_QUALIFIER_RE = re.compile(r"\b(?:junior|associate|assistant)\b", re.IGNORECASE)
@@ -121,10 +179,14 @@ _PRIORITY_RULES: list[tuple[int, str, list[re.Pattern]]] = [
         re.compile(r"\b(?:bi|business\s+intelligence)\b", re.IGNORECASE),
         re.compile(r"\b(?:forecasting|demand\s+plan(?:ning|ner|s)?)\b", re.IGNORECASE),
         re.compile(r"\bsupply\s+chain\s+(?:analyst|analytics)\b", re.IGNORECASE),
-        re.compile(r"\b(?:machine|reinforcement)\s+learning\b", re.IGNORECASE),
-        re.compile(r"\bai\b", re.IGNORECASE),
         re.compile(r"\bresearch\s+(?:scientist|engineer)\b", re.IGNORECASE),
-        re.compile(r"\bdata\s+(?:engineer|scientist|science)\b", re.IGNORECASE),
+        re.compile(r"\bdata\s+(?:engineer|scientist)\b", re.IGNORECASE),
+        # ruolo AI/ML esplicito: "AI Engineer", "Machine Learning Researcher"
+        re.compile(
+            r"(?<![.\w])(?:ai|ki|ml|(?:machine|reinforcement|deep)\s+learning)\s+"
+            r"(?:engineer|scientist|researcher|research|developer|entwickler|analyst|consultant)\b",
+            re.IGNORECASE,
+        ),
     ]),
     (2, "consulting_security", [
         re.compile(r"\bproject\s+(?:coordinator|assistant)\b", re.IGNORECASE),
@@ -162,18 +224,44 @@ def role_category(title: str) -> tuple[str, int] | None:
       4 support_qa — IT support, QA, helpdesk, tester
       5 unclassified — nessun pattern riconosciuto ma nessuna parola non-tech
     Ritorna None se il titolo è chiaramente non tecnico (blacklist senza override).
+
+    La priorità 1 richiede che il TITOLO indichi il ruolo (analyst, product
+    owner, data engineer, AI researcher...). Le parole-tema (AI, ML, data
+    science) da sole valgono la priorità 1 solo se il titolo non indica un
+    altro ruolo: con un ruolo commerciale, hardware o di processo l'annuncio
+    è scartato, con un ruolo delle categorie 2–4 prende quella categoria.
     """
     if not title:
         return None
     if _PM_RE.search(title) and _PM_QUALIFIER_RE.search(title):
         return ("analytics_ai", 1)
+
+    matched: tuple[str, int] | None = None
     for priority, category, patterns in _PRIORITY_RULES:
-        for pat in patterns:
-            if pat.search(title):
-                return (category, priority)
+        if any(pat.search(title) for pat in patterns):
+            matched = (category, priority)
+            break
+    if matched and matched[1] == 1:
+        return matched
+
+    if _NON_TARGET_RE.search(title):
+        # "Software Engineer, Sales Tools" resta un ruolo software;
+        # tutto il resto è commerciale/hardware/processo → fuori.
+        return matched if matched and matched[0] == "software" else None
+    if matched:
+        return matched
+    if _P1_TOPIC_RE.search(title):
+        return ("analytics_ai", 1)
     if _BLACKLIST_RE.search(title) and not _BLACKLIST_OVERRIDE_RE.search(title):
         return None
     return ("unclassified", 5)
+
+
+def posting_kind(title: str) -> str:
+    """Ritorna "thesis" per tesi e dottorati (PhD, Promotion, Masterarbeit,
+    Thesis...) e "job" per tutto il resto. Le tesi non si scartano: si
+    marcano, così la pagina le può tenere fuori dalla lista principale."""
+    return "thesis" if _THESIS_RE.search(title or "") else "job"
 
 
 def is_tech_role(title: str) -> bool:
@@ -249,23 +337,78 @@ def load_postings(db_path: str | Path) -> list[dict]:
 # Filtro paese
 # ---------------------------------------------------------------------------
 
-def country_ok(posting: dict) -> bool:
-    """True se l'annuncio è geograficamente rilevante.
+REGION_REMOTE_EUROPE = "remote_eu"
+REGION_UNKNOWN = "unknown"
 
-    - Paese vuoto → tieni (sconosciuto, dubbio pro-annuncio)
-    - CH, DE, NL (ALLOWED_COUNTRIES) → sempre tieni
-    - Remoto + paese in EUROPE_COUNTRIES → tieni
-    - Altrimenti → scarta
+# La località parla di tutta l'Europa...
+_EUROPE_WIDE_RE = re.compile(r"\b(?:europe|europa|european|emea|eu|dach)\b", re.IGNORECASE)
+# ...o nomina uno dei paesi richiesti (o una loro città principale).
+_ALLOWED_PLACE_RE = re.compile(
+    r"\b(?:germany|deutschland|germania|switzerland|schweiz|suisse|svizzera"
+    r"|netherlands|nederland|holland|paesi\s+bassi"
+    r"|berlin|munich|münchen|hamburg|frankfurt|cologne|köln|stuttgart|düsseldorf"
+    r"|zurich|zürich|geneva|genf|basel|bern|lausanne"
+    r"|amsterdam|rotterdam|eindhoven|utrecht|den\s+haag|the\s+hague)\b",
+    re.IGNORECASE,
+)
+# Località che nomina in chiaro un paese (o un'area) non richiesto. Serve
+# solo per gli annunci senza country_code: "United States (Remote)" ha il
+# paese indicato, anche se non nel campo giusto. L'elenco è volutamente
+# corto: ciò che non riconosce resta tra i "paese non indicato".
+_FOREIGN_PLACE_RE = re.compile(
+    r"\b(?:united\s+states|usa|america|americas|north\s+america|namer|latam|canada"
+    r"|california|washington|new\s+york|nyc|san\s+francisco|bay\s+area|mountain\s+view"
+    r"|virginia|maryland|colorado|texas|boston|seattle|toronto|montreal"
+    r"|mexico|brazil|brasil|costa\s+rica|argentina"
+    r"|united\s+kingdom|uk|england|london|ireland|dublin|france|paris|spain|madrid|barcelona"
+    r"|italy|poland|portugal|sweden|denmark|norway|finland"
+    r"|apac|asia|india|bengaluru|bangalore|gurugram|philippines|manila|korea|seoul|taiwan|taipei"
+    r"|japan|tokyo|china|singapore|indonesia|australia|sydney|melbourne"
+    r"|kuwait|qatar|doha|ksa|saudi|uae|dubai|israel)\b",
+    re.IGNORECASE,
+)
+# "US" solo in maiuscolo: "Remote US" sì, il pronome "us" no.
+_US_CODE_RE = re.compile(r"\bUS\b")
+
+
+def posting_region(posting: dict) -> str | None:
+    """Dove si lavora, ai fini del filtro. None = annuncio da scartare.
+
+    - CH, DE, NL → il codice paese
+    - Altro paese europeo → "remote_eu" solo se l'annuncio è remoto E la
+      località parla di Europa/EMEA o nomina un paese richiesto
+      ("Remote, Europe", "United Kingdom, Germany, Netherlands").
+      "Remote, United Kingdom" o "Remote, Spain" sono lavori in quel paese
+      → scartati, come tutti gli altri paesi non richiesti.
+    - Paese non indicato → "unknown" (si tiene: meglio un falso positivo),
+      a meno che la località nomini in chiaro solo paesi non richiesti
+      ("United States (Remote)", "Manila, Philippines").
     """
-    country = posting.get("country_code") or ""
-    if not country:
-        return True
+    country = (posting.get("country_code") or "").strip().upper()
+    location = posting.get("location") or ""
+    # "Europa" può stare anche nel titolo: "ML Engineer - EMEA Remote"
+    in_scope = bool(
+        _EUROPE_WIDE_RE.search(location)
+        or _ALLOWED_PLACE_RE.search(location)
+        or _EUROPE_WIDE_RE.search(posting.get("title") or "")
+    )
+
     if country in ALLOWED_COUNTRIES:
-        return True
+        return country
+    if not country:
+        foreign = _FOREIGN_PLACE_RE.search(location) or _US_CODE_RE.search(location)
+        if foreign and not in_scope:
+            return None
+        return REGION_UNKNOWN
     work_mode = (posting.get("work_mode") or "").lower()
-    if work_mode == "remote" and country in EUROPE_COUNTRIES:
-        return True
-    return False
+    if work_mode == "remote" and country in EUROPE_COUNTRIES and in_scope:
+        return REGION_REMOTE_EUROPE
+    return None
+
+
+def country_ok(posting: dict) -> bool:
+    """True se l'annuncio è geograficamente rilevante (vedi posting_region)."""
+    return posting_region(posting) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +420,8 @@ def prefilter(postings: list[dict]) -> tuple[list[dict], list[dict]]:
 
     Ritorna (kept, discarded).
     - Discarded: chiave '_discard_reason'
-    - Kept: chiavi '_role_category' e '_role_priority'
+    - Kept: chiavi '_role_category', '_role_priority', '_region' (CH/DE/NL,
+      "remote_eu" o "unknown") e '_kind' ("job" o "thesis")
     """
     kept: list[dict] = []
     discarded: list[dict] = []
@@ -286,8 +430,9 @@ def prefilter(postings: list[dict]) -> tuple[list[dict], list[dict]]:
         title = p.get("title") or ""
 
         # 1. Paese
-        if not country_ok(p):
-            country = p.get("country_code") or "??"
+        region = posting_region(p)
+        if region is None:
+            country = p.get("country_code") or p.get("location") or "??"
             discarded.append({**p, "_discard_reason": f"paese non in lista ({country})"})
             continue
 
@@ -309,7 +454,13 @@ def prefilter(postings: list[dict]) -> tuple[list[dict], list[dict]]:
         if is_incompatible:
             discarded.append({**p, "_discard_reason": reason})
         else:
-            kept.append({**p, "_role_category": rc[0], "_role_priority": rc[1]})
+            kept.append({
+                **p,
+                "_role_category": rc[0],
+                "_role_priority": rc[1],
+                "_region": region,
+                "_kind": posting_kind(title),
+            })
 
     kept.sort(key=lambda p: p["_role_priority"])
     return kept, discarded
