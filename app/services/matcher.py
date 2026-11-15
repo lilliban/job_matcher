@@ -382,8 +382,12 @@ class MatchingEngine:
         "score": 75,
         "matched_skills": ["Python", "Machine Learning", "SQL"],
         "missing_skills": ["Java", "Docker"],
-        "gap_analysis": "Testo in italiano che spiega cosa manca e come colmarlo"
-    }"""
+        "gap_analysis": "Hai già Python e SQL. Ti mancano Java e Docker: puoi colmarli con un piccolo progetto."
+    }
+
+    Il campo gap_analysis è letto direttamente dalla persona: scrivilo in
+    italiano, in seconda persona singolare ("hai", "ti manca", "puoi").
+    Non usare mai "il candidato", "la candidata" né il suo nome."""
 
         SYSTEM_PROMPT = """
     Sei un esperto recruiter specializzato in tecnologia e data science.
@@ -397,6 +401,8 @@ class MatchingEngine:
     5. Considera il livello di esperienza (junior/mid/senior)
     6. Se il candidato ha >70% delle competenze richieste, lo score deve essere >70
     7. Se il candidato ha <30% delle competenze richieste, lo score deve essere <30
+    8. Nel campo gap_analysis rivolgiti direttamente alla persona con il "tu"
+       ("hai", "ti manca"): mai "il candidato", "la candidata" o il suo nome
     """
 
         data = await self.llm.complete_json(full_prompt, default=None, system_prompt=SYSTEM_PROMPT)

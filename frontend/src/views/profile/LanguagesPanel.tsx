@@ -17,6 +17,33 @@ const LANGUAGES = [
   ["dutch", "Olandese"],
 ] as const;
 
+/**
+ * Nome italiano di una lingua salvata. Il valore può arrivare dal modulo
+ * ("italian"), dal CV importato ("Italian") o come codice ISO ("it"):
+ * si confronta in minuscolo e, se non è noto, si mostra com'è.
+ */
+const LANGUAGE_NAME: Record<string, string> = {
+  ...Object.fromEntries(LANGUAGES),
+  it: "Italiano",
+  en: "Inglese",
+  de: "Tedesco",
+  fr: "Francese",
+  es: "Spagnolo",
+  pt: "Portoghese",
+  nl: "Olandese",
+  italiano: "Italiano",
+  inglese: "Inglese",
+  tedesco: "Tedesco",
+  francese: "Francese",
+  spagnolo: "Spagnolo",
+  portoghese: "Portoghese",
+  olandese: "Olandese",
+};
+
+function languageName(value: string): string {
+  return LANGUAGE_NAME[value.trim().toLowerCase()] ?? value;
+}
+
 const LEVELS = [
   ["madrelingua", "Madrelingua"],
   ["A1", "A1 - Base"],
@@ -97,7 +124,7 @@ export function LanguagesPanel({ userId }: { userId: string }) {
             className="flex items-center justify-between rounded-xl border border-line bg-paper-2 py-1 pl-4 pr-1 text-sm"
           >
             <span>
-              <span className="font-medium capitalize">{l.language}</span>
+              <span className="font-medium capitalize">{languageName(l.language)}</span>
               <span className="ml-2 text-ink-faint">{l.level}</span>
             </span>
             <button

@@ -2,7 +2,7 @@
 
 /*
  * Design tokens JobMatcher — palette "Teal on paper", Instrument Sans + DM Mono.
- * Un solo accento (teal). Ambra solo per avvisi ("Sotto soglia"), rosso scuro
+ * Un solo accento (teal). Ambra solo per avvisi veri, mai per le barre, rosso scuro
  * solo per errori. Niente ombre: la profondità la danno superfici e bordi.
  * Tailwind v4 registra i token come utility (bg-paper, text-ink, bg-accent…).
  */
@@ -70,6 +70,13 @@ body {
 :where(a, button, select, input, textarea, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/* Niente parole orfane in fondo ai paragrafi (Chrome e Safari; altrove si ignora) */
+@layer base {
+  p {
+    text-wrap: pretty;
+  }
 }
 
 /* Titolo di pagina condiviso */

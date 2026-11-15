@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/matches", tags=["Match"],
     dependencies=[Depends(verify_token)])
 
-VALID_STATUSES = {"new", "saved", "applied", "interview", "rejected", "discarded"}
+# Il campo Match.status è una stringa libera nel database (nessun vincolo):
+# l'elenco dei valori ammessi vive solo qui.
+VALID_STATUSES = {
+    "new", "saved", "applied", "waiting", "interview", "accepted", "rejected", "discarded",
+}
 
 # Stessa cartella usata dagli script: download_feed riusa il file se ha
 # meno di 6 ore, quindi le richieste ravvicinate non toccano la rete.
@@ -40,8 +44,9 @@ def feed_matches(
     db: Session = Depends(get_db),
 ):
     """Annunci del feed compatibili con le skill del profilo, senza LLM.
-    Ordinati per priorità; dentro la priorità prima le coperture misurate
-    (sopra soglia, poi sotto soglia), in coda quelle non misurabili.
+    Ordinati per priorità; dentro la priorità prima chi supera la soglia,
+    poi chi è sotto, in coda le coperture non misurabili. In ogni fascia
+    prima le coperture su almeno 3 skill, subito dopo quelle con pochi dati.
     Tesi e dottorati sono inclusi con kind="thesis"."""
     if not db.get(models.User, user_id):
         raise HTTPException(404, "Utente non trovato")

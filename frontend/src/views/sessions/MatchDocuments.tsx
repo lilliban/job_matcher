@@ -3,9 +3,15 @@ import { toast } from "sonner";
 import { Download, Eye } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useMatchDocuments } from "@/api/queries";
 import type { GeneratedDocumentOut } from "@/api/schemas";
+
+/** Nome accessibile del pulsante che apre il documento. */
+const DOC_OPEN_LABEL: Record<string, string> = {
+  cv: "Apri CV su misura",
+  cover_letter: "Apri lettera",
+  email: "Apri email",
+};
 
 const DOC_LABEL: Record<string, string> = {
   cv: "CV su misura",
@@ -66,15 +72,16 @@ export function MatchDocuments({ matchId }: { matchId: string }) {
             key={d.id}
             className="flex items-center justify-between rounded-xl border border-line bg-paper-2 py-1 pl-4 pr-1 text-sm"
           >
-            <div>
-              <span className="font-medium">{DOC_LABEL[d.doc_type] ?? d.doc_type}</span>
-              <Badge variant="outline" className="ml-2">
-                {d.doc_type}
-              </Badge>
-            </div>
+            <span className="font-medium">{DOC_LABEL[d.doc_type] ?? "Documento"}</span>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={() => setOpenDoc(d)}>
-                <Eye className="h-4 w-4" />
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setOpenDoc(d)}
+                aria-label={DOC_OPEN_LABEL[d.doc_type] ?? "Apri documento"}
+                title={DOC_OPEN_LABEL[d.doc_type] ?? "Apri documento"}
+              >
+                <Eye className="h-4 w-4" aria-hidden />
               </Button>
             </div>
           </li>
@@ -108,12 +115,7 @@ function DocumentViewer({
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-line p-4">
-          <div>
-            <p className="text-xs font-medium text-ink-faint">
-              {doc.doc_type}
-            </p>
-            <h3 className="jm-h2">{DOC_LABEL[doc.doc_type] ?? doc.doc_type}</h3>
-          </div>
+          <h3 className="jm-h2">{DOC_LABEL[doc.doc_type] ?? "Documento"}</h3>
           <Button variant="ghost" size="sm" onClick={onClose}>
             Chiudi
           </Button>

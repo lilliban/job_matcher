@@ -31,6 +31,9 @@ const REGION_REMOTE_EU = "remote_eu";
 const REGION_UNKNOWN = "unknown";
 const NO_COUNTRY_LABEL = "Paese non indicato";
 const PAGE_SIZE = 30;
+/** Soglia di copertura del feed: COVERAGE_THRESHOLD in app/services/coverage.py */
+const THRESHOLD_PCT = 60;
+const BELOW_LABEL = `Sotto il ${THRESHOLD_PCT}%`;
 const CARD_SKILLS = 4;
 
 const regionNames =
@@ -137,6 +140,8 @@ export function MatchesView() {
   }, [matches, activePriority, activeCountry, sort]);
 
   const belowCount = useMemo(() => filtered.filter((m) => m.below_threshold).length, [filtered]);
+  // Il gruppo di ruoli sulla card serve solo se nella lista ce n'è più d'uno.
+  const showCategory = useMemo(() => new Set(filtered.map((m) => m.category)).size > 1, [filtered]);
   const hasFilters = activePriority != null || activeCountry !== "";
 
   // Ogni cambio di filtro o ordine riparte dalla prima pagina.
@@ -160,7 +165,7 @@ export function MatchesView() {
     return (
       <Shell>
         <EmptyState status className="mt-8" art={<DocumentsLens className="w-full" />}>
-          Carico i tuoi match… La prima volta scarico il feed, ci vuole qualche secondo.
+          Carico i tuoi match… Scarico il feed degli annunci: ci vuole circa mezzo minuto la prima volta.
         </EmptyState>
       </Shell>
     );
@@ -211,6 +216,7 @@ export function MatchesView() {
   return (
     <Shell
       lead={`${matches.length.toLocaleString("it-IT")} annunci confrontati con le tue competenze. La percentuale dice quante delle skill richieste hai già.`}
+      note={`Mostro anche gli annunci sotto il ${THRESHOLD_PCT}%, per non perderne di buoni.`}
     >
       <section
         aria-label="Filtri"
@@ -278,13 +284,13 @@ export function MatchesView() {
             {hasFilters
               ? `${filtered.length.toLocaleString("it-IT")} annunci con questi filtri`
               : `${filtered.length.toLocaleString("it-IT")} annunci`}
-            {belowCount > 0 && ` · ${belowCount.toLocaleString("it-IT")} sotto soglia`}
+            {belowCount > 0 && ` · ${belowCount.toLocaleString("it-IT")} sotto il ${THRESHOLD_PCT}%`}
           </p>
 
           <ul className="mt-3 grid grid-cols-1 items-start gap-3 md:grid-cols-2 2xl:grid-cols-3">
             {shown.map((m, i) => (
               <li key={`${m.source_url ?? ""}|${m.title ?? ""}|${m.company_name ?? ""}|${i}`} className="min-w-0">
-                <MatchCard m={m} onOpen={() => setOpen(m)} />
+                <MatchCard m={m} showCategory={showCategory} onOpen={() => setOpen(m)} />
               </li>
             ))}
           </ul>
@@ -315,10 +321,11 @@ export function MatchesView() {
 /* Struttura della pagina                                                      */
 /* -------------------------------------------------------------------------- */
 
-function Shell({ lead, children }: { lead?: string; children: ReactNode }) {
+function Shell({ lead, note, children }: { lead?: string; note?: string; children: ReactNode }) {
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title="I tuoi match" lead={lead} />
+      {note && <p className="mt-2 max-w-2xl text-sm text-ink-faint">{note}</p>}
       {children}
     </div>
   );
@@ -369,7 +376,7 @@ function CoverageBar({ m, size = "sm" }: { m: FeedMatch; size?: "sm" | "lg" }) {
       >
         {pct > 0 && (
           <div
-            className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-warn" : "bg-accent")}
+            className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-teal-soft" : "bg-accent")}
             style={{ width: `${pct}%` }}
           />
         )}
@@ -411,7 +418,7 @@ function LowDataTag() {
 
 function BelowTag() {
   return (
-    <span className="rounded-full bg-warn-wash px-2 py-0.5 text-xs font-medium text-warn">Sotto soglia</span>
+    <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-ink-soft">{BELOW_LABEL}</span>
   );
 }
 
@@ -441,7 +448,7 @@ function CardScore({ m }: { m: FeedMatch }) {
       >
         {pct > 0 && (
           <div
-            className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-warn" : "bg-accent")}
+            className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-teal-soft" : "bg-accent")}
             style={{ width: `${pct}%` }}
           />
         )}
@@ -453,7 +460,15 @@ function CardScore({ m }: { m: FeedMatch }) {
   );
 }
 
-function MatchCard({ m, onOpen }: { m: FeedMatch; onOpen: () => void }) {
+function MatchCard({
+  m,
+  showCategory,
+  onOpen,
+}: {
+  m: FeedMatch;
+  showCategory: boolean;
+  onOpen: () => void;
+}) {
   const skills = m.matched_skills.slice(0, CARD_SKILLS);
   const extra = m.matched_skills.length - skills.length;
   const place = regionLabel(m.region);
@@ -491,7 +506,9 @@ function MatchCard({ m, onOpen }: { m: FeedMatch; onOpen: () => void }) {
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-3">
-        <span className="text-xs text-ink-faint">Priorità {m.priority}</span>
+        <span className="text-xs text-ink-faint">
+          {showCategory ? (CATEGORY_LABEL[m.category] ?? m.category) : ""}
+        </span>
         {m.source_url && (
           <a
             href={m.source_url}

@@ -112,10 +112,12 @@ def test_run_matching_keeps_and_orders(orm, add_user, run):
         for r in results
     ]
     assert got == [
-        ("Junior Data Analyst", 1, False, 1.0),
+        # sopra soglia: prima 5 skill misurate, poi pochi dati (2 skill)
         ("Junior Data Engineer", 1, False, 0.667),
-        ("Junior BI Analyst", 1, True, 0.5),
+        ("Junior Data Analyst", 1, False, 1.0),
+        # sotto soglia: prima 3 skill misurate, poi pochi dati (2 skill)
         ("Junior Data Scientist", 1, True, 0.0),
+        ("Junior BI Analyst", 1, True, 0.5),
         # copertura non misurabile: in coda alla sua priorità
         ("Junior Business Analyst", 1, False, None),
         ("Junior Software Engineer", 3, False, 1.0),
@@ -332,16 +334,60 @@ def test_few_skills_not_above_many_at_similar_coverage(orm, add_user, run):
     ]
 
 
-def test_few_skills_still_first_when_gap_is_large(orm, add_user, run):
+def test_low_data_not_buried_under_rich_below_threshold(orm, add_user, run):
+    """La fascia di soglia pesa più dei pochi dati: un 100% su due skill
+    resta davanti a un 50% su quattro."""
     uid = add_user("a@example.test", USER_SKILLS)
     rows = [
         # 4 skill misurate, 2/4 = 50% (sotto soglia)
         _row("Junior Data Analyst Half", "Python, SQL, Kafka, Rust"),
-        # 2 di 2 skill: 100%
+        # 2 di 2 skill: 100%, pochi dati
         _row("Junior Data Analyst Two", "Python, SQL"),
     ]
     titles = [r["title"] for r in run(uid, rows)]
     assert titles == ["Junior Data Analyst Two", "Junior Data Analyst Half"]
+
+
+def test_enough_skills_first_within_band(orm, add_user, run):
+    """Sopra soglia: chi ha almeno 3 skill misurate viene prima anche se il
+    pochi dati ha una percentuale più alta."""
+    uid = add_user("a@example.test", USER_SKILLS)
+    rows = [
+        _row("Junior Data Analyst One", "Python"),                         # 1 di 1: 100%
+        _row("Junior Data Analyst Four", "Python, SQL and Docker. Nice to have: Kafka"),  # 85,7%
+    ]
+    got = [(r["title"], r["below_threshold"], r["skills_measured"]) for r in run(uid, rows)]
+    assert got == [
+        ("Junior Data Analyst Four", False, 4),
+        ("Junior Data Analyst One", False, 1),
+    ]
+
+
+def test_low_data_stays_visible_before_unmeasured(orm, add_user, run):
+    """Pochi dati: dopo chi ha più skill, ma prima delle coperture non
+    misurabili, e mai tolti dalla lista."""
+    uid = add_user("a@example.test", USER_SKILLS)
+    rows = [
+        _row("Junior Data Analyst None", "Excel and PowerPoint"),       # nessuna skill riconosciuta
+        _row("Junior Data Analyst One", "Python"),                      # 1 di 1
+        _row("Junior Data Analyst Four", "Python, SQL and Docker. Nice to have: Kafka"),  # 4 skill, 85,7%
+    ]
+    got = [(r["title"], r["skills_measured"]) for r in run(uid, rows)]
+    titles = [t for t, _ in got]
+    assert titles.index("Junior Data Analyst Four") < titles.index("Junior Data Analyst One")
+    assert "Junior Data Analyst One" in titles
+    if "Junior Data Analyst None" in titles:
+        assert titles.index("Junior Data Analyst One") < titles.index("Junior Data Analyst None")
+
+
+def test_low_data_group_sorted_by_threshold_then_coverage(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    rows = [
+        _row("Junior Data Analyst Half Two", "Python, Rust"),   # 1 di 2: 50%, sotto soglia
+        _row("Junior Data Analyst One", "Python"),              # 1 di 1: 100%
+    ]
+    titles = [r["title"] for r in run(uid, rows)]
+    assert titles == ["Junior Data Analyst One", "Junior Data Analyst Half Two"]
 
 
 def test_few_skills_does_not_jump_priority(orm, add_user, run):

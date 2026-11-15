@@ -480,7 +480,7 @@ class Match(Base):
     missing_skills = Column(Text, nullable=True)  # JSON
     gap_analysis = Column(Text, nullable=True)
     # RF6.1 — tracking candidature
-    status = Column(String, default="new")  # new/saved/applied/interview/rejected/discarded
+    status = Column(String, default="new")  # new/saved/applied/waiting/interview/accepted/rejected/discarded
     created_at = Column(DateTime, default=utcnow)
 
     session = relationship("SearchSession", back_populates="matches")

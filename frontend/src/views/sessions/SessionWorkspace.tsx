@@ -19,9 +19,24 @@ import { MatchDocuments } from "./MatchDocuments";
 import { ReportPanel } from "../report/ReportBody";
 import type { MatchDetailOut } from "@/api/schemas";
 
+/**
+ * Le skill di un match arrivano come testo: a volte un array JSON
+ * (`["Python", "SQL"]`), a volte un elenco separato da virgole.
+ */
 function splitSkills(raw: string | null | undefined): string[] {
   if (!raw) return [];
-  return raw
+  const text = raw.trim();
+  if (text.startsWith("[")) {
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed.map((s) => String(s).trim()).filter(Boolean);
+      }
+    } catch {
+      // JSON non valido: si prova con le virgole
+    }
+  }
+  return text
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
@@ -38,14 +53,16 @@ const RUN_STATE_LABEL: Record<string, string> = {
 const MODE_LABEL: Record<string, string> = {
   companies: "Nelle mie aziende",
   market: "Su tutte le aziende",
-  both: "Aziende + mercato",
+  both: "Aziende e mercato",
 };
 
 const MATCH_STATUS_LABEL: Record<string, string> = {
   new: "Nuovo",
   saved: "Salvato",
   applied: "Inviato",
+  waiting: "In attesa",
   interview: "Colloquio",
+  accepted: "Accettato",
   rejected: "Rifiutato",
   discarded: "Scartato",
 };
@@ -56,6 +73,7 @@ const STATUS_FILTERS = [
   { key: "saved", label: "Salvati" },
   { key: "applied", label: "Inviati" },
   { key: "interview", label: "Colloquio" },
+  { key: "rejected", label: "Rifiutati" },
 ];
 
 export function SessionWorkspace({
@@ -107,7 +125,7 @@ export function SessionWorkspace({
   async function handleCancel() {
     try {
       await cancelSession.mutateAsync(sessionId);
-      toast.message("Annullamento richiesto — termina al prossimo checkpoint");
+      toast.message("Sto fermando la ricerca. Si chiude tra poco.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore annullamento");
     }
@@ -180,7 +198,7 @@ export function SessionWorkspace({
         {(logs.data ?? []).length > 0 && (
           <details className="mt-4">
             <summary className="flex min-h-10 cursor-pointer items-center text-sm text-ink-soft">
-              Log live ({logs.data!.length})
+              Dettagli tecnici ({logs.data!.length})
             </summary>
             <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-line bg-surface p-3 font-mono text-xs text-ink-soft">
               {logs.data!.slice(-100).map((l, i) => {
@@ -322,7 +340,7 @@ export function SessionWorkspace({
   );
 }
 
-const STATUSES = ["new", "saved", "applied", "interview", "rejected", "discarded"] as const;
+const STATUSES = ["new", "saved", "applied", "waiting", "interview", "accepted", "rejected", "discarded"] as const;
 
 function MatchDetail({
   match,
@@ -377,7 +395,7 @@ function MatchDetail({
         return matched.length > 0 ? (
           <div>
             <p className="mb-2 text-xs font-medium text-ink-faint">
-              Match
+              Hai
             </p>
             <div className="flex flex-wrap gap-1">
               {matched.map((s) => (
@@ -395,7 +413,7 @@ function MatchDetail({
         return missing.length > 0 ? (
           <div>
             <p className="mb-2 text-xs font-medium text-ink-faint">
-              Ti manca
+              Ti mancano
             </p>
             <div className="flex flex-wrap gap-1">
               {missing.map((s) => (

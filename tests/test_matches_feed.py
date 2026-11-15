@@ -180,3 +180,37 @@ def test_feed_marks_thesis_and_unknown_country(orm, api, add_user, make_feed):
     assert by_title["Junior Business Analyst"]["region"] == "unknown"
     assert by_title["Junior Business Analyst"]["country_code"] is None
     assert "Junior BI Analyst" not in by_title
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/matches/{id}/status: stati della candidatura
+# ---------------------------------------------------------------------------
+
+def _add_match(orm, db, user_id: str) -> str:
+    m = orm.models
+    session = m.SearchSession(user_id=user_id, role_title="Data Analyst")
+    db.add(session)
+    db.flush()
+    listing = m.JobListing(session_id=session.id, title="Junior Data Analyst", company_name="Acme")
+    db.add(listing)
+    db.flush()
+    match = m.Match(session_id=session.id, listing_id=listing.id)
+    db.add(match)
+    db.commit()
+    return match.id
+
+
+@pytest.mark.parametrize("status", ["waiting", "accepted", "applied", "interview", "rejected"])
+def test_status_accepts_application_states(orm, db, api, add_user, status):
+    uid = add_user("a@example.test", ["Python"])
+    mid = _add_match(orm, db, uid)
+    res = api.patch(f"/api/matches/{mid}/status", json={"status": status})
+    assert res.status_code == 200
+    assert res.json()["status"] == status
+
+
+def test_status_rejects_unknown_value(orm, db, api, add_user):
+    uid = add_user("a@example.test", ["Python"])
+    mid = _add_match(orm, db, uid)
+    res = api.patch(f"/api/matches/{mid}/status", json={"status": "boh"})
+    assert res.status_code == 400

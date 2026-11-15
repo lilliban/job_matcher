@@ -1,9 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Building2, History, Search, Sparkles, UserRound } from "lucide-react";
 
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useHealth } from "@/hooks/useHealth";
 import { cn } from "@/lib/utils";
 
 export const NAV_ITEMS = [
@@ -31,15 +30,28 @@ function Logo() {
 
 export function AppLayout() {
   const { user } = useCurrentUser();
-  const health = useHealth();
   const { pathname } = useLocation();
   const mobileNav = useRef<HTMLElement>(null);
+  // Sfumatura a destra finché il menu ha ancora voci nascoste da quel lato.
+  const [moreRight, setMoreRight] = useState(false);
+
+  const updateMoreRight = useCallback(() => {
+    const nav = mobileNav.current;
+    if (!nav) return;
+    setMoreRight(nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4);
+  }, []);
 
   // Sul telefono il menu scorre in orizzontale: la voce attiva va tenuta in vista.
   useEffect(() => {
     const active = mobileNav.current?.querySelector<HTMLElement>('[aria-current="page"]');
     active?.scrollIntoView({ block: "nearest", inline: "center" });
-  }, [pathname]);
+    updateMoreRight();
+  }, [pathname, updateMoreRight]);
+
+  useEffect(() => {
+    window.addEventListener("resize", updateMoreRight);
+    return () => window.removeEventListener("resize", updateMoreRight);
+  }, [updateMoreRight]);
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-paper text-ink md:grid-cols-[240px_minmax(0,1fr)]">
@@ -78,7 +90,6 @@ export function AppLayout() {
 
         <div className="mt-auto border-t border-line px-2 pt-4 text-xs text-ink-faint">
           <div className="truncate font-medium text-ink-soft">{user ? user.name : "Nessun profilo"}</div>
-          <div className="mt-1 font-mono">LLM: {health.data?.llm_primary ?? "…"}</div>
         </div>
       </aside>
 
@@ -88,9 +99,11 @@ export function AppLayout() {
           <Logo />
           <span className="max-w-[45%] truncate text-xs text-ink-faint">{user?.name ?? ""}</span>
         </div>
+        <div className="relative">
         <nav
           ref={mobileNav}
           aria-label="Sezioni principali"
+          onScroll={updateMoreRight}
           className="flex gap-1 overflow-x-auto scroll-px-3 px-3 py-2 [scrollbar-width:none]"
         >
           {NAV_ITEMS.map(({ to, label }) => (
@@ -108,6 +121,15 @@ export function AppLayout() {
             </NavLink>
           ))}
         </nav>
+        {/* Indica che il menu continua a destra: sparisce a fine corsa */}
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface to-transparent transition-opacity duration-150",
+            moreRight ? "opacity-100" : "opacity-0",
+          )}
+        />
+        </div>
       </header>
 
       <main id="contenuto" className="min-h-screen min-w-0 px-4 py-6 sm:px-6 md:p-12">

@@ -335,7 +335,7 @@ class MatchDetailOut(MatchOut):
 
 
 class MatchStatusUpdate(BaseModel):
-    status: str = Field(description="new/saved/applied/interview/rejected/discarded")
+    status: str = Field(description="new/saved/applied/waiting/interview/accepted/rejected/discarded")
 
 
 class FeedMatchOut(BaseModel):
