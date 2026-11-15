@@ -1,5 +1,7 @@
 """
 Pipeline di matching senza LLM: feed → prefiltro → copertura skill.
+Nessun annuncio classificato viene scartato per copertura bassa: viene
+solo marcato below_threshold e messo dopo gli altri.
 
 Collega pezzi che esistono già, senza duplicarli:
   - feed_reader: download_feed, load_postings, prefilter
@@ -31,12 +33,15 @@ def load_user_skill_names(db: Session, user_id: str) -> list[str]:
 
 
 def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
-    """Prefiltro + copertura + soglia + ordinamento su annunci già caricati.
+    """Prefiltro + copertura + ordinamento su annunci già caricati.
 
-    Un annuncio resta se passes_threshold è vero. Quelli di priorità 5
-    (ruolo non classificato) devono in più avere una copertura misurata e
-    maggiore di zero: senza nessun segnale dal titolo, serve almeno un
-    segnale dalle skill.
+    La selezione favorisce il recall: meglio un annuncio in più che un
+    buon match perso.
+    - Priorità 1–4: l'annuncio resta sempre. `below_threshold` è vero se
+      la copertura è misurata e sotto COVERAGE_THRESHOLD.
+    - Priorità 5 (ruolo non classificato): resta solo se la copertura è
+      misurata e maggiore di zero — senza nessun segnale dal titolo, serve
+      almeno un segnale dalle skill.
     """
     kept, _discarded = prefilter(postings)
 
@@ -44,8 +49,6 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
     for p in kept:
         text = p.get("requirements_raw") or p.get("description") or ""
         cov = compute_coverage(user_skills, text)
-        if not passes_threshold(cov):
-            continue
 
         pct = cov["percentage"]
         priority = p["_role_priority"]
@@ -60,16 +63,22 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
             "priority": priority,
             "category": p["_role_category"],
             "coverage": pct,
+            # passes_threshold è vero anche con copertura None: il suo
+            # contrario è esattamente "misurata e sotto soglia"
+            "below_threshold": not passes_threshold(cov),
             "matched_skills": cov["matched"],
             "missing_required": cov["missing_required"],
             "missing_nice": cov["missing_nice"],
             "first_seen_at": p.get("first_seen_at"),
         })
 
-    # Priorità crescente, poi copertura decrescente; la copertura None
-    # (nessuna skill riconosciuta nel testo) va in fondo alla sua priorità.
+    # Priorità crescente, poi sopra soglia prima di sotto soglia, poi
+    # copertura decrescente. La copertura None (nessuna skill riconosciuta
+    # nel testo) non è sotto soglia: va dopo le coperture misurate ≥ soglia
+    # e prima degli annunci below_threshold.
     results.sort(key=lambda r: (
         r["priority"],
+        r["below_threshold"],
         r["coverage"] is None,
         -(r["coverage"] or 0.0),
     ))
