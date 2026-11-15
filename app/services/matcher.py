@@ -42,6 +42,14 @@ def _keyword_re(keywords: list[str]) -> re.Pattern:
 _JUNIOR_RE = _keyword_re(JUNIOR_KEYWORDS)
 _SENIOR_RE = _keyword_re(SENIOR_KEYWORDS)
 
+_YEARS_RE = re.compile(r'(\d+)\s*\+?\s*(?:years?|anni|jahre|ans)', re.IGNORECASE)
+_HISTORY_CONTEXT_RE = re.compile(
+    r'anni\s+di\s+storia|years?\s+of\s+history'
+    r'|since\s+\d{4}|seit\s+\d{4}|dal\s+\d{4}'
+    r'|founded\s+in|gegründet',
+    re.IGNORECASE,
+)
+
 
 def normalize_semantic_score(score: float) -> float:
     if score > 1:
@@ -49,8 +57,20 @@ def normalize_semantic_score(score: float) -> float:
     return max(0.0, min(1.0, score))
 
 
-def seniority_check(title: str, text: str) -> tuple[bool, str]:
-    """Ritorna (is_incompatible, motivo) in base al livello di seniority."""
+def seniority_check(
+    title: str,
+    text: str,
+    min_years_exp: int | None = None,
+) -> tuple[bool, str]:
+    """Ritorna (is_incompatible, motivo) in base al livello di seniority.
+
+    Ordine di priorità:
+    1. Titolo junior  → keep (anche se il testo dice 5 anni)
+    2. Titolo senior  → scarta
+    3. min_years_exp dal DB (se fornito) → scarta se > 2
+    4. Regex sul testo come ripiego (solo se min_years_exp assente);
+       ignora valori > 15 e frasi di storia aziendale.
+    """
     title_norm = (title or "").lower()
 
     if _JUNIOR_RE.search(title_norm):
@@ -60,10 +80,23 @@ def seniority_check(title: str, text: str) -> tuple[bool, str]:
     if m:
         return True, f"titolo richiede livello senior+ ({m.group()})"
 
-    years_pattern = re.findall(r'(\d+)\s*\+?\s*(?:years|anni|jahre|ans)', (text or "").lower())
-    for y in years_pattern:
-        if int(y) > 2:
-            return True, f"richiede {y}+ anni di esperienza"
+    if min_years_exp is not None:
+        if min_years_exp > 2:
+            return True, f"richiede {min_years_exp}+ anni di esperienza"
+        return False, ""
+
+    # Fallback: regex sul testo
+    text_lower = (text or "").lower()
+    for ym in _YEARS_RE.finditer(text_lower):
+        years = int(ym.group(1))
+        if years > 15:
+            continue
+        start = max(0, ym.start() - 80)
+        end = min(len(text_lower), ym.end() + 80)
+        if _HISTORY_CONTEXT_RE.search(text_lower[start:end]):
+            continue
+        if years > 2:
+            return True, f"richiede {years}+ anni di esperienza"
 
     return False, ""
 
