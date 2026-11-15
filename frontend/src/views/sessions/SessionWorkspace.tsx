@@ -30,7 +30,7 @@ const RUN_STATE_LABEL: Record<string, string> = {
   draft: "Pronta",
   running: "In esecuzione",
   completed: "Completata",
-  error: "Errore",
+  error: "Non riuscita",
   cancelled: "Annullata",
 };
 
@@ -60,9 +60,11 @@ const STATUS_FILTERS = [
 export function SessionWorkspace({
   userId,
   sessionId,
+  onDelete,
 }: {
   userId: string;
   sessionId: string;
+  onDelete?: () => void;
 }) {
   const session = useSession(userId, sessionId);
   const status = useSessionStatus(userId, sessionId);
@@ -125,23 +127,28 @@ export function SessionWorkspace({
       <Card className="p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="font-mono text-xs uppercase tracking-wider text-ink-faint">
+            <p className="text-xs font-medium text-ink-faint">
               {MODE_LABEL[s.search_mode ?? "both"] ?? "Ricerca"}
             </p>
-            <h2 className="font-serif text-2xl">{s.role_title || "Qualsiasi ruolo adatto a te"}</h2>
+            <h2 className="jm-h2">{s.role_title || "Qualsiasi ruolo adatto a te"}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-soft">
               {s.preferred_country && <span>{s.preferred_country}</span>}
               {s.location_pref && <span>· {s.location_pref}</span>}
               {s.contract_type && <span>· {s.contract_type}</span>}
               <span>· soglia {Math.round((s.match_threshold ?? 0) * 100)}%</span>
-              <Badge variant={isRunning ? "warn" : isTerminal ? "good" : "outline"}>
-                {RUN_STATE_LABEL[runStatus] ?? runStatus}
-              </Badge>
+              <span className={runStatus === "error" ? "text-bad" : undefined}>
+                · {RUN_STATE_LABEL[runStatus] ?? runStatus}
+              </span>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {onDelete && !isRunning && (
+              <Button variant="ghost" onClick={onDelete}>
+                Elimina
+              </Button>
+            )}
             {isRunning ? (
-              <Button variant="destructive" onClick={handleCancel} disabled={cancelSession.isPending}>
+              <Button variant="outline" onClick={handleCancel} disabled={cancelSession.isPending}>
                 Annulla ricerca
               </Button>
             ) : (
@@ -171,15 +178,15 @@ export function SessionWorkspace({
 
         {(logs.data ?? []).length > 0 && (
           <details className="mt-4">
-            <summary className="cursor-pointer text-xs uppercase tracking-wider text-ink-faint">
+            <summary className="flex min-h-10 cursor-pointer items-center text-sm text-ink-soft">
               Log live ({logs.data!.length})
             </summary>
-            <div className="mt-2 max-h-56 overflow-y-auto rounded-sm border border-line bg-ink p-3 font-mono text-xs text-paper/80">
+            <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-line bg-surface p-3 font-mono text-xs text-ink-soft">
               {logs.data!.slice(-100).map((l, i) => {
                 const line = [l.source, l.action, l.result].filter(Boolean).join(" · ");
                 return (
                   <div key={i} className="mb-1">
-                    <span className="text-paper/40">
+                    <span className="text-ink-faint">
                       {new Date(l.ts).toLocaleTimeString("it-IT")}
                     </span>{" "}
                     <span
@@ -188,7 +195,7 @@ export function SessionWorkspace({
                           ? "text-bad"
                           : l.level === "warning"
                             ? "text-warn"
-                            : "text-paper/80"
+                            : "text-ink-soft"
                       }
                     >
                       {line || "…"}
@@ -210,7 +217,7 @@ export function SessionWorkspace({
             aria-selected={tab === k}
             onClick={() => setTab(k)}
             className={
-              "-mb-px border-b-2 px-4 py-2 text-sm transition-colors " +
+              "-mb-px h-11 border-b-2 px-4 text-sm transition-colors " +
               (tab === k ? "border-accent font-medium text-ink" : "border-transparent text-ink-soft hover:text-ink")
             }
           >
@@ -225,23 +232,23 @@ export function SessionWorkspace({
       <Card className="p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-serif text-2xl">Annunci raccolti</h2>
+            <h2 className="jm-h2">Annunci raccolti</h2>
             <p className="text-sm text-ink-soft">
               {listings.data?.length ?? 0} annunci · {matches.data?.length ?? 0} match
               sopra soglia
             </p>
           </div>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f.key}
                 type="button"
                 onClick={() => setFilter(f.key)}
                 className={
-                  "rounded-sm px-3 py-1 text-xs transition-colors " +
+                  "jm-press inline-flex h-10 items-center rounded-full px-4 text-sm " +
                   (filter === f.key
-                    ? "bg-ink text-paper"
-                    : "text-ink-soft hover:bg-line/50")
+                    ? "bg-accent text-paper-2"
+                    : "text-ink-soft hover:bg-surface")
                 }
               >
                 {f.label}
@@ -251,7 +258,7 @@ export function SessionWorkspace({
         </div>
 
         {filteredMatches.length === 0 ? (
-          <div className="rounded border border-dashed border-line p-8 text-center text-sm text-ink-faint">
+          <div className="rounded-2xl border border-dashed border-line p-8 text-center text-sm text-ink-faint">
             Nessun annuncio sopra soglia, per ora. Se la ricerca è finita guarda «Com'è andata» per capire perché.
           </div>
         ) : (
@@ -263,7 +270,7 @@ export function SessionWorkspace({
                     type="button"
                     onClick={() => setSelectedMatchId(m.id)}
                     className={
-                      "w-full rounded-sm border p-3 text-left text-sm transition-colors " +
+                      "jm-press w-full rounded-xl border p-3 text-left text-sm " +
                       (selectedMatchId === m.id
                         ? "border-accent bg-accent-wash"
                         : "border-line bg-paper-2 hover:border-line-hard")
@@ -300,7 +307,7 @@ export function SessionWorkspace({
                   }}
                 />
               ) : (
-                <div className="rounded border border-dashed border-line p-8 text-sm text-ink-faint">
+                <div className="rounded-2xl border border-dashed border-line p-8 text-sm text-ink-faint">
                   Seleziona un annuncio a sinistra per vedere dettagli e documenti.
                 </div>
               )}
@@ -327,20 +334,21 @@ function MatchDetail({
     <Card className="space-y-4 p-6">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-mono text-xs uppercase tracking-wider text-ink-faint">
+          <p className="text-xs font-medium text-ink-faint">
             {listing?.source_board ?? "—"}
           </p>
-          <h3 className="font-serif text-xl">{listing?.title ?? "—"}</h3>
+          <h3 className="jm-h2">{listing?.title ?? "—"}</h3>
           <p className="text-sm text-ink-soft">{listing?.company_name}</p>
         </div>
         <div className="text-right">
-          <div className="font-serif text-3xl text-accent">
+          <div className="font-mono text-3xl tracking-[-0.02em] text-accent">
             {Math.round((match.score ?? 0) * 100)}%
           </div>
           <select
             value={match.status}
             onChange={(e) => onStatusChange(e.target.value)}
-            className="mt-2 h-7 rounded-sm border border-line bg-paper-2 px-2 text-xs"
+            aria-label="Stato della candidatura"
+            className="mt-2 h-10 rounded-full border border-field bg-paper-2 px-3 text-sm"
           >
             {STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -366,7 +374,7 @@ function MatchDetail({
         const matched = splitSkills(match.matched_skills);
         return matched.length > 0 ? (
           <div>
-            <p className="mb-2 font-mono text-xs uppercase tracking-wider text-ink-faint">
+            <p className="mb-2 text-xs font-medium text-ink-faint">
               Match
             </p>
             <div className="flex flex-wrap gap-1">
@@ -384,7 +392,7 @@ function MatchDetail({
         const missing = splitSkills(match.missing_skills);
         return missing.length > 0 ? (
           <div>
-            <p className="mb-2 font-mono text-xs uppercase tracking-wider text-ink-faint">
+            <p className="mb-2 text-xs font-medium text-ink-faint">
               Ti manca
             </p>
             <div className="flex flex-wrap gap-1">
@@ -399,14 +407,14 @@ function MatchDetail({
       })()}
 
       {match.gap_analysis && (
-        <div className="rounded border border-line bg-paper p-3 text-sm text-ink-soft">
+        <div className="rounded-xl border border-line bg-paper p-3 text-sm text-ink-soft">
           {match.gap_analysis}
         </div>
       )}
 
       {listing?.description && (
         <details>
-          <summary className="cursor-pointer text-xs uppercase tracking-wider text-ink-faint">
+          <summary className="flex min-h-10 cursor-pointer items-center text-sm text-ink-soft">
             Descrizione annuncio
           </summary>
           <p className="mt-2 whitespace-pre-wrap text-sm text-ink-soft">

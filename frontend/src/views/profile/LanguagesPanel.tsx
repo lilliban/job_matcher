@@ -28,7 +28,7 @@ const LEVELS = [
 ] as const;
 
 const selectClass =
-  "h-9 rounded-sm border border-line bg-paper-2 px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  "h-11 rounded-xl border border-field bg-paper-2 px-3 text-sm sm:h-10";
 
 export function LanguagesPanel({ userId }: { userId: string }) {
   const languagesQuery = useLanguages(userId);
@@ -48,9 +48,9 @@ export function LanguagesPanel({ userId }: { userId: string }) {
   }
 
   return (
-    <Card className="p-8">
+    <Card className="p-5 sm:p-8">
       <header className="mb-4">
-        <h2 className="font-serif text-2xl">Lingue conosciute</h2>
+        <h2 className="jm-h2">Lingue conosciute</h2>
         <p className="mt-1 text-sm text-ink-soft">
           Servono per filtrare gli annunci che richiedono lingue che non parli.
         </p>
@@ -94,7 +94,7 @@ export function LanguagesPanel({ userId }: { userId: string }) {
         {(languagesQuery.data ?? []).map((l) => (
           <li
             key={l.id}
-            className="flex items-center justify-between rounded-sm border border-line bg-paper-2 px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-xl border border-line bg-paper-2 py-1 pl-4 pr-1 text-sm"
           >
             <span>
               <span className="font-medium capitalize">{l.language}</span>
@@ -103,7 +103,7 @@ export function LanguagesPanel({ userId }: { userId: string }) {
             <button
               type="button"
               onClick={() => deleteLang.mutate(l.id)}
-              className="rounded-sm p-1 text-ink-faint hover:bg-line/50 hover:text-bad"
+              className="jm-press grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-bad-wash hover:text-bad"
               aria-label="Rimuovi"
             >
               <X className="h-4 w-4" />

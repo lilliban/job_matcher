@@ -170,7 +170,7 @@ export function ApplyPanel() {
               {files.map((f, i) => (
                 <span
                   key={`${f.name}-${i}`}
-                  className="inline-flex items-center gap-1 rounded-sm border border-line bg-paper px-2 py-1 text-xs"
+                  className="inline-flex items-center gap-1 rounded-full border border-line bg-paper py-1 pl-3 pr-1 text-xs"
                 >
                   {f.name}
                   <button
@@ -227,10 +227,10 @@ function ResultPanel({ result }: { result: ApplicationResult }) {
   return (
     <section className="mt-10 space-y-6">
       <div>
-        <p className="font-mono text-xs uppercase tracking-wider text-ink-faint">
+        <p className="text-xs font-medium text-ink-faint">
           Annuncio riconosciuto
         </p>
-        <h2 className="font-serif text-2xl">
+        <h2 className="jm-h2">
           {listing.title}
           {listing.company_name ? ` — ${listing.company_name}` : ""}
         </h2>
@@ -240,7 +240,7 @@ function ResultPanel({ result }: { result: ApplicationResult }) {
       {Object.keys(edited).map((docType) => (
         <Card key={docType} className="overflow-hidden">
           <header className="border-b border-line p-4">
-            <h3 className="font-serif text-xl">{DOC_LABEL[docType] ?? docType}</h3>
+            <h3 className="jm-h2">{DOC_LABEL[docType] ?? docType}</h3>
           </header>
           <Textarea
             className="min-h-[360px] rounded-none border-0 font-mono"

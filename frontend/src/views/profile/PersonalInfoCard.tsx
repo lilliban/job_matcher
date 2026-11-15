@@ -87,11 +87,11 @@ export function PersonalInfoCard({ user }: Props) {
   }
 
   return (
-    <Card className="p-8">
+    <Card className="p-5 sm:p-8">
       <div className="mb-6 flex items-baseline justify-between">
-        <h2 className="font-serif text-2xl">Anagrafica</h2>
+        <h2 className="jm-h2">Anagrafica</h2>
         {dirty && (
-          <span className="font-mono text-xs uppercase tracking-wider text-warn">
+          <span className="text-xs font-medium text-warn">
             Modifiche non salvate
           </span>
         )}

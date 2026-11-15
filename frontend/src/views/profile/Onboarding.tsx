@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { FileUp, Loader2, PencilLine, Plus, Trash2, X } from "lucide-react";
 
-import { Guide } from "@/components/Avatar";
+import { Hint, PageHeader } from "@/components/Page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateProfile, useParseCv, type CvDraft, type ParsedCv } from "@/api/queries";
+import { dedupeSoftSkills } from "@/lib/softSkills";
 import { useAppState } from "@/stores/useAppState";
 
 type Step = "choose" | "upload" | "review" | "manual";
@@ -26,7 +27,7 @@ const LANGUAGES: Array<[string, string]> = [
 const LEVELS = ["madrelingua", "A1", "A2", "B1", "B2", "C1", "C2"];
 
 const selectClass =
-  "h-9 rounded-sm border border-line bg-paper-2 px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  "h-11 rounded-xl border border-field bg-paper-2 px-3 text-sm sm:h-10";
 
 const emptyDraft: CvDraft = {
   name: "",
@@ -50,7 +51,7 @@ function draftFromParsed(p: ParsedCv["profile"]): CvDraft {
     location: s(p.location),
     bio: s(p.bio),
     hard_skills: p.hard_skills ?? [],
-    soft_skills: p.soft_skills ?? [],
+    soft_skills: dedupeSoftSkills(p.soft_skills ?? []),
     languages: (p.languages ?? [])
       .filter((l) => l.language)
       .map((l) => ({
@@ -102,6 +103,7 @@ export function Onboarding() {
         ...draft,
         // le righe lasciate vuote durante la revisione non vanno inviate
         hard_skills: draft.hard_skills.filter(Boolean),
+        soft_skills: dedupeSoftSkills(draft.soft_skills),
         experiences: draft.experiences.filter((e) => e.company.trim() && e.role.trim()),
         education: draft.education.filter((e) => e.institution.trim()),
         cv_text: cvText,
@@ -118,13 +120,10 @@ export function Onboarding() {
   if (step === "choose") {
     return (
       <div className="space-y-10">
-        <Guide waving size={96}>
-          <p className="font-serif text-2xl">Ciao, sono qui per aiutarti!</p>
-          <p className="mt-1 text-ink-soft">
-            Creiamo il tuo profilo: ci vuole un minuto. Poi ti suggerirò io ruoli, competenze e
-            aziende su misura.
-          </p>
-        </Guide>
+        <PageHeader
+          title="Crea il tuo profilo"
+          lead="Ci vuole un minuto. Dal profilo partono ruoli, competenze e aziende suggerite."
+        />
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <ChoiceCard
@@ -149,7 +148,7 @@ export function Onboarding() {
     return (
       <div className="space-y-6">
         <BackLink onClick={() => setStep("choose")} />
-        <Guide>Carica il tuo CV in PDF. Controllo io cosa c'è dentro.</Guide>
+        <Hint>Carica il tuo CV in PDF: leggo i dati e te li faccio controllare.</Hint>
         <UploadBox onFile={handleFile} loading={parseCv.isPending} />
       </div>
     );
@@ -159,8 +158,8 @@ export function Onboarding() {
     return (
       <div className="space-y-6">
         <BackLink onClick={() => setStep("choose")} />
-        <Guide>Partiamo dalle basi. Il resto lo aggiungi dopo, sezione per sezione.</Guide>
-        <Card className="space-y-5 p-8">
+        <Hint>Partiamo dalle basi. Il resto lo aggiungi dopo, sezione per sezione.</Hint>
+        <Card className="space-y-5 p-5 sm:p-8">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <Field label="Nome e cognome" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} placeholder="Mario Rossi" />
             <Field label="Email" type="email" value={draft.email} onChange={(v) => setDraft({ ...draft, email: v })} placeholder="mario@esempio.it" />
@@ -181,13 +180,13 @@ export function Onboarding() {
   return (
     <div className="space-y-6">
       <BackLink onClick={() => setStep("upload")} label="Carica un altro CV" />
-      <Guide>
+      <Hint>
         Ecco cosa ho letto. <strong>Controlla e correggi</strong>: a volte sbaglio, soprattutto
         con le date e i layout insoliti. Quando è giusto, crea il profilo.
-      </Guide>
+      </Hint>
 
-      <Card className="space-y-5 p-8">
-        <h2 className="font-serif text-2xl">Anagrafica</h2>
+      <Card className="space-y-5 p-5 sm:p-8">
+        <h2 className="jm-h2">Anagrafica</h2>
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <Field label="Nome e cognome" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} />
           <Field label="Email" type="email" value={draft.email} onChange={(v) => setDraft({ ...draft, email: v })} warn={!draft.email} hint={!draft.email ? "Non l'ho trovata nel CV: inseriscila" : undefined} />
@@ -200,8 +199,8 @@ export function Onboarding() {
         </div>
       </Card>
 
-      <Card className="space-y-5 p-8">
-        <h2 className="font-serif text-2xl">Competenze</h2>
+      <Card className="space-y-5 p-5 sm:p-8">
+        <h2 className="jm-h2">Competenze</h2>
         <ChipEditor
           label="Tecniche"
           items={draft.hard_skills}
@@ -211,13 +210,13 @@ export function Onboarding() {
         <ChipEditor
           label="Trasversali"
           items={draft.soft_skills}
-          onChange={(soft_skills) => setDraft({ ...draft, soft_skills })}
+          onChange={(soft_skills) => setDraft({ ...draft, soft_skills: dedupeSoftSkills(soft_skills) })}
           placeholder="Es. Lavoro in team"
         />
       </Card>
 
       <Card className="space-y-4 p-8">
-        <h2 className="font-serif text-2xl">Lingue</h2>
+        <h2 className="jm-h2">Lingue</h2>
         {draft.languages.map((l, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2">
             <select
@@ -246,16 +245,16 @@ export function Onboarding() {
       </Card>
 
       <Card className="space-y-4 p-8">
-        <h2 className="font-serif text-2xl">Esperienze</h2>
+        <h2 className="jm-h2">Esperienze</h2>
         {draft.experiences.map((e, i) => {
           const set = (patch: Partial<typeof e>) =>
             setDraft({ ...draft, experiences: draft.experiences.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
           return (
-            <div key={i} className="space-y-3 rounded-sm border border-line bg-paper p-4">
+            <div key={i} className="space-y-3 rounded-xl border border-line bg-paper p-4">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <Field label="Ruolo" value={e.role} onChange={(v) => set({ role: v })} />
                 <Field label="Azienda" value={e.company} onChange={(v) => set({ company: v })} />
-                <Field label="Dal" value={e.start_date} onChange={(v) => set({ start_date: v })} placeholder="2021-03" />
+                <Field label="Dal" value={e.start_date} onChange={(v) => set({ start_date: v })} />
                 <Field label="Al (vuoto = in corso)" value={e.end_date} onChange={(v) => set({ end_date: v })} />
               </div>
               <Textarea rows={3} value={e.description} onChange={(ev) => set({ description: ev.target.value })} placeholder="Cosa facevi" />
@@ -269,12 +268,12 @@ export function Onboarding() {
       </Card>
 
       <Card className="space-y-4 p-8">
-        <h2 className="font-serif text-2xl">Formazione</h2>
+        <h2 className="jm-h2">Formazione</h2>
         {draft.education.map((e, i) => {
           const set = (patch: Partial<typeof e>) =>
             setDraft({ ...draft, education: draft.education.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
           return (
-            <div key={i} className="grid grid-cols-1 items-end gap-3 rounded-sm border border-line bg-paper p-4 md:grid-cols-[1.5fr_1fr_1fr_90px_auto]">
+            <div key={i} className="grid grid-cols-1 items-end gap-3 rounded-xl border border-line bg-paper p-4 md:grid-cols-[1.5fr_1fr_1fr_90px_auto]">
               <Field label="Istituto" value={e.institution} onChange={(v) => set({ institution: v })} />
               <Field label="Titolo" value={e.degree} onChange={(v) => set({ degree: v })} />
               <Field label="Ambito" value={e.field} onChange={(v) => set({ field: v })} />
@@ -287,7 +286,7 @@ export function Onboarding() {
       </Card>
 
       {critique && (
-        <details className="rounded border border-line bg-paper-2 p-5">
+        <details className="rounded-2xl border border-line bg-paper-2 p-5">
           <summary className="cursor-pointer text-sm font-medium">
             Un consiglio sul tuo CV (facoltativo)
           </summary>
@@ -295,7 +294,7 @@ export function Onboarding() {
         </details>
       )}
 
-      <div className="sticky bottom-4 flex items-center justify-between gap-3 rounded border border-line bg-paper-2 p-4 shadow-md">
+      <div className="sticky bottom-4 flex items-center justify-between gap-3 rounded-2xl border border-line-hard bg-paper-2 p-4">
         <span className="text-sm text-ink-soft">
           {canCreate ? "Tutto a posto? Potrai modificare ogni cosa anche dopo." : "Servono almeno nome ed email valida."}
         </span>
@@ -317,11 +316,11 @@ function ChoiceCard({
     <button
       type="button"
       onClick={onClick}
-      className="group relative flex flex-col items-start gap-3 rounded border border-line bg-paper-2 p-7 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className="jm-press group relative flex flex-col items-start gap-3 rounded-2xl border border-line-hard bg-paper-2 p-6 sm:p-7 text-left transition-all hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
       {tag && <Badge className="absolute right-4 top-4">{tag}</Badge>}
       <span className="grid h-12 w-12 place-items-center rounded-full bg-accent-wash text-accent">{icon}</span>
-      <span className="font-serif text-2xl">{title}</span>
+      <span className="jm-h2">{title}</span>
       <span className="text-sm text-ink-soft">{text}</span>
     </button>
   );
@@ -329,7 +328,7 @@ function ChoiceCard({
 
 function BackLink({ onClick, label = "Indietro" }: { onClick: () => void; label?: string }) {
   return (
-    <button type="button" onClick={onClick} className="text-sm text-ink-soft underline-offset-4 hover:underline">
+    <button type="button" onClick={onClick} className="inline-flex h-10 items-center rounded-full text-sm text-ink-soft underline-offset-4 hover:underline">
       ← {label}
     </button>
   );
@@ -344,7 +343,7 @@ function UploadBox({ onFile, loading }: { onFile: (f: File | undefined) => void;
       onDragLeave={() => setOver(false)}
       onDrop={(e) => { e.preventDefault(); setOver(false); onFile(e.dataTransfer.files[0]); }}
       className={
-        "flex flex-col items-center gap-3 rounded border-2 border-dashed p-12 text-center transition-colors " +
+        "flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-8 sm:p-12 text-center transition-colors " +
         (over ? "border-accent bg-accent-wash" : "border-line-hard bg-paper-2")
       }
     >
@@ -404,7 +403,7 @@ function ChipEditor({
         {items.map((s) => (
           <Badge key={s} className="gap-1 pr-1">
             {s}
-            <button type="button" aria-label={`Rimuovi ${s}`} className="rounded-sm p-0.5 hover:bg-ink/10" onClick={() => onChange(items.filter((x) => x !== s))}>
+            <button type="button" aria-label={`Rimuovi ${s}`} className="grid h-6 w-6 place-items-center rounded-full hover:bg-paper-2" onClick={() => onChange(items.filter((x) => x !== s))}>
               <X className="h-3 w-3" />
             </button>
           </Badge>
@@ -423,7 +422,7 @@ function ChipEditor({
 
 function RemoveButton({ onClick, label = "Rimuovi" }: { onClick: () => void; label?: string }) {
   return (
-    <button type="button" aria-label={label} title={label} onClick={onClick} className="rounded-sm p-2 text-ink-faint hover:bg-bad-wash hover:text-bad">
+    <button type="button" aria-label={label} title={label} onClick={onClick} className="jm-press grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-bad-wash hover:text-bad">
       <Trash2 className="h-4 w-4" />
     </button>
   );

@@ -1,4 +1,4 @@
-import { Guide } from "@/components/Avatar";
+import { Loading, PageHeader } from "@/components/Page";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   useEducation,
@@ -19,7 +19,7 @@ export function ProfileView() {
   const { user, userId, isBooting } = useCurrentUser();
 
   if (isBooting) {
-    return <div className="mx-auto max-w-4xl text-ink-faint">Caricamento…</div>;
+    return <div className="mx-auto max-w-4xl"><Loading /></div>;
   }
 
   if (!user || !userId) {
@@ -43,7 +43,7 @@ export function ProfileView() {
   );
 }
 
-/** Saluto dell'assistente + barra di completezza: dice cosa manca invece di
+/** Titolo + barra di completezza: dice cosa manca invece di
  *  lasciare l'utente a indovinare se il profilo è "abbastanza". */
 function ProfileHeader({ userId, name }: { userId: string; name: string }) {
   const hard = useHardSkills(userId);
@@ -66,19 +66,19 @@ function ProfileHeader({ userId, name }: { userId: string; name: string }) {
   const first = name.trim().split(/\s+/)[0];
 
   return (
-    <header className="space-y-4">
-      <Guide waving={pct < 100} size={84}>
-        <p className="font-serif text-2xl">Ciao {first}!</p>
-        <p className="mt-1 text-ink-soft">
-          {loading
+    <div className="space-y-4">
+      <PageHeader
+        title="Profilo"
+        lead={
+          loading
             ? "Guardo a che punto è il tuo profilo…"
             : pct === 100
-              ? "Il profilo è completo. Più è preciso, meglio lavorano le ricerche: aggiornalo quando cambia qualcosa."
-              : `Il profilo è completo al ${pct}%. Ti manca: ${missing.join(", ")}.`}
-        </p>
-      </Guide>
+              ? `Ciao ${first}, il profilo è completo. Aggiornalo quando cambia qualcosa: le ricerche partono da qui.`
+              : `Ciao ${first}, il profilo è completo al ${pct}%. Ti manca: ${missing.join(", ")}.`
+        }
+      />
       <div
-        className="h-1.5 w-full overflow-hidden rounded-full bg-line"
+        className="h-1.5 w-full max-w-2xl overflow-hidden rounded-full bg-accent-wash"
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
@@ -87,6 +87,6 @@ function ProfileHeader({ userId, name }: { userId: string; name: string }) {
       >
         <div className="h-full bg-accent transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
-    </header>
+    </div>
   );
 }

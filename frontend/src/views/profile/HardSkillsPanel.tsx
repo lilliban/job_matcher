@@ -21,10 +21,8 @@ const LEVELS = [
   ["expert", "Avanzato"],
 ] as const;
 
-const LEVEL_LABEL: Record<string, string> = Object.fromEntries(LEVELS);
-
 const selectClass =
-  "h-9 rounded-sm border border-line bg-paper-2 px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  "h-11 rounded-xl border border-field bg-paper-2 px-3 text-sm sm:h-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
 export function HardSkillsPanel({ userId }: { userId: string }) {
   const skillsQuery = useHardSkills(userId);
@@ -71,16 +69,16 @@ export function HardSkillsPanel({ userId }: { userId: string }) {
   const suggestions = (advice.data?.skills ?? []).filter((s) => !owned.has(s.name.toLowerCase()));
 
   return (
-    <Card className="p-8">
+    <Card className="p-5 sm:p-8">
       <header className="mb-5">
-        <h2 className="font-serif text-2xl">Competenze tecniche</h2>
+        <h2 className="jm-h2">Competenze tecniche</h2>
         <p className="mt-1 text-sm text-ink-soft">
           Strumenti, linguaggi, metodi: tutto ciò che sai usare, anche se ti sembra scontato.
         </p>
       </header>
 
       <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-[220px] flex-1">
+        <div className="min-w-0 flex-1 basis-56">
           <Input
             placeholder="Scrivi una competenza e premi Invio (es. Python)"
             value={name}
@@ -94,7 +92,7 @@ export function HardSkillsPanel({ userId }: { userId: string }) {
         </Button>
         <button
           type="button"
-          className="text-xs text-ink-soft underline underline-offset-2"
+          className="inline-flex h-10 items-center rounded-full px-3 text-sm text-ink-soft underline underline-offset-4 hover:text-ink"
           onClick={() => setShowDetails((v) => !v)}
         >
           {showDetails ? "Nascondi dettagli" : "Livello e anni"}
@@ -131,17 +129,13 @@ export function HardSkillsPanel({ userId }: { userId: string }) {
           {skills.map((s) => (
             <li
               key={s.id}
-              className="group flex items-center gap-2 rounded-full border border-line bg-paper-2 py-1 pl-3 pr-1 text-sm"
+              className="flex h-11 items-center gap-0.5 rounded-full border border-line-hard bg-paper-2 pl-4 pr-0.5 text-sm sm:h-10"
             >
               <span className="font-medium">{s.name}</span>
-              <span className="text-xs text-ink-faint">
-                {LEVEL_LABEL[s.level ?? ""] ?? s.level}
-                {s.years_exp ? ` · ${s.years_exp}a` : ""}
-              </span>
               <button
                 type="button"
                 onClick={() => deleteSkill.mutate(s.id)}
-                className="rounded-full p-1 text-ink-faint hover:bg-bad-wash hover:text-bad"
+                className="jm-press grid h-10 w-10 place-items-center rounded-full text-ink-faint hover:bg-bad-wash hover:text-bad"
                 aria-label={`Rimuovi ${s.name}`}
               >
                 <X className="h-3.5 w-3.5" />
@@ -151,14 +145,14 @@ export function HardSkillsPanel({ userId }: { userId: string }) {
         </ul>
       )}
 
-      <div className="mt-6 rounded-sm border border-accent-wash bg-accent-wash/40 p-4">
+      <div className="mt-6 rounded-xl bg-surface p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <p className="flex items-center gap-2 text-sm font-medium text-accent-ink">
+          <p className="flex items-center gap-2 text-sm font-medium text-ink">
             <Sparkles className="h-4 w-4" /> Forse hai anche queste competenze
           </p>
           <button
             type="button"
-            className="flex items-center gap-1 text-xs text-ink-soft hover:text-ink"
+            className="jm-press inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm text-ink-soft hover:bg-paper-2 hover:text-ink"
             onClick={() => advice.refetch()}
             disabled={advice.isFetching}
           >
@@ -183,7 +177,7 @@ export function HardSkillsPanel({ userId }: { userId: string }) {
                 type="button"
                 title={s.why}
                 onClick={() => add(s.name, { fromSuggestion: true })}
-                className="rounded-full border border-accent bg-paper-2 px-3 py-1 text-xs hover:bg-accent hover:text-paper"
+                className="jm-press inline-flex h-10 items-center rounded-full border border-line-hard bg-paper-2 px-4 text-sm hover:border-accent"
               >
                 + {s.name}
               </button>
@@ -206,10 +200,10 @@ function Suggestions({
   onPick: (name: string) => void; onClose: () => void;
 }) {
   return (
-    <div className="mt-4 rounded-sm border border-accent-wash bg-accent-wash/40 p-4">
+    <div className="mt-4 rounded-xl bg-surface p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
-        <p className="text-sm text-accent-ink">✨ {title}</p>
-        <button type="button" onClick={onClose} aria-label="Chiudi suggerimenti" className="text-ink-faint hover:text-ink">
+        <p className="text-sm text-ink">{title}</p>
+        <button type="button" onClick={onClose} aria-label="Chiudi suggerimenti" className="jm-press -m-2 grid h-10 w-10 place-items-center rounded-full text-ink-faint hover:bg-paper-2 hover:text-ink">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -224,7 +218,7 @@ function Suggestions({
               key={s.name}
               type="button"
               onClick={() => onPick(s.name)}
-              className="rounded-full border border-accent bg-paper-2 px-3 py-1 text-xs hover:bg-accent hover:text-paper"
+              className="jm-press inline-flex h-10 items-center rounded-full border border-line-hard bg-paper-2 px-4 text-sm hover:border-accent"
             >
               + {s.name}
             </button>

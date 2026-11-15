@@ -150,6 +150,9 @@ JOB_BOARDS: dict[str, list[dict]] = {
         {"name": "ZipRecruiter", "url_template": "https://www.ziprecruiter.com/jobs-search?search={q}&location={loc}"},
         {"name": "Dice", "url_template": "https://www.dice.com/jobs?q={q}&location={loc}"},
     ],
+    "NL": [
+        {"name": "Indeed NL", "url_template": "https://nl.indeed.com/jobs?q={q}&l={loc}"},
+    ],
     "ES": [
         {"name": "InfoJobs ES", "url_template": "https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword={q}&province={loc}"},
         {"name": "Indeed ES", "url_template": "https://es.indeed.com/trabajo?q={q}&l={loc}"},

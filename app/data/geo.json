@@ -83,6 +83,16 @@
       ]
     },
     {
+      "code": "NL",
+      "name": "Paesi Bassi",
+      "search_name": "Netherlands",
+      "regions": [
+        "Noord-Holland", "Zuid-Holland", "Utrecht", "Noord-Brabant",
+        "Gelderland", "Overijssel", "Limburg", "Groningen", "Friesland",
+        "Drenthe", "Flevoland", "Zeeland"
+      ]
+    },
+    {
       "code": "US",
       "name": "Stati Uniti",
       "search_name": "United States",

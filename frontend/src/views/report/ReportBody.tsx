@@ -6,8 +6,8 @@ import type { IntelligenceReportOut } from "@/api/schemas";
 /** Analisi di una ricerca: com'è andata e cosa ti blocca. */
 export function ReportPanel({ userId, sessionId }: { userId: string; sessionId: string }) {
   const report = useIntelligenceReport(userId, sessionId);
-  if (report.isLoading) return <Card className="p-8 text-ink-faint">Calcolo l'analisi…</Card>;
-  if (!report.data) return <Card className="p-8 text-ink-faint">Nessun dato ancora.</Card>;
+  if (report.isLoading) return <Card className="p-5 text-ink-soft sm:p-8">Calcolo l'analisi…</Card>;
+  if (!report.data) return <Card className="p-5 text-ink-soft sm:p-8">Nessun dato ancora.</Card>;
   return <ReportBody data={report.data} />;
 }
 
@@ -15,11 +15,11 @@ function ReportBody({ data }: { data: IntelligenceReportOut }) {
   return (
     <>
       {data.summary && (
-        <Card className="p-8">
-          <p className="mb-2 font-mono text-xs uppercase tracking-wider text-ink-faint">
+        <Card className="p-5 sm:p-8">
+          <p className="mb-2 text-xs font-medium text-ink-faint">
             In poche parole
           </p>
-          <p className="font-serif text-2xl leading-snug">{data.summary}</p>
+          <p className="text-xl leading-snug tracking-[-0.01em]">{data.summary}</p>
         </Card>
       )}
 
@@ -38,8 +38,8 @@ function ReportBody({ data }: { data: IntelligenceReportOut }) {
           count?: number;
         }>;
         return missing.length > 0 ? (
-          <Card className="p-8">
-            <h2 className="mb-4 font-serif text-2xl">Cosa ti manca più spesso</h2>
+          <Card className="p-5 sm:p-8">
+            <h2 className="mb-4 jm-h2">Cosa ti manca più spesso</h2>
             <ul className="space-y-2">
               {missing.map((s, i) => (
                 <li
@@ -56,13 +56,13 @@ function ReportBody({ data }: { data: IntelligenceReportOut }) {
       })()}
 
       {(data.company_outcomes ?? []).length > 0 && (
-        <Card className="p-8">
-          <h2 className="mb-4 font-serif text-2xl">Aziende target: cosa è successo</h2>
+        <Card className="p-5 sm:p-8">
+          <h2 className="mb-4 jm-h2">Aziende target: cosa è successo</h2>
           <ul className="space-y-3">
             {data.company_outcomes!.map((c) => (
               <li
                 key={c.company}
-                className="rounded-sm border border-line bg-paper-2 p-3 text-sm"
+                className="rounded-xl border border-line bg-paper-2 p-3 text-sm"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{c.company}</span>
@@ -78,8 +78,8 @@ function ReportBody({ data }: { data: IntelligenceReportOut }) {
       )}
 
       {(data.alternative_roles ?? []).length > 0 && (
-        <Card className="p-8">
-          <h2 className="mb-4 font-serif text-2xl">Prova anche questi ruoli</h2>
+        <Card className="p-5 sm:p-8">
+          <h2 className="mb-4 jm-h2">Prova anche questi ruoli</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {data.alternative_roles!.map((r) => (
               <Card key={r.role} className="p-4">
@@ -100,10 +100,10 @@ function ReportBody({ data }: { data: IntelligenceReportOut }) {
 function Metric({ label, value }: { label: string; value: string | number | null }) {
   return (
     <Card className="p-4">
-      <div className="font-mono text-xs uppercase tracking-wider text-ink-faint">
+      <div className="text-xs font-medium text-ink-faint">
         {label}
       </div>
-      <div className="mt-1 font-serif text-2xl">{value ?? "—"}</div>
+      <div className="mt-1 font-mono text-2xl tracking-[-0.02em] tabular-nums">{value ?? "—"}</div>
     </Card>
   );
 }

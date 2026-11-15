@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   useAddSoftSkill,
   useDeleteSoftSkill,
@@ -12,10 +11,15 @@ import {
   useSuggestSoftSkills,
 } from "@/api/queries";
 import type { SkillSuggestion } from "@/api/schemas";
+import { canonicalSoftSkill, softSkillKey } from "@/lib/softSkills";
+import { cn } from "@/lib/utils";
 
 interface Props {
   userId: string;
 }
+
+const canonical = canonicalSoftSkill;
+const keyOf = softSkillKey;
 
 export function SoftSkillsPanel({ userId }: Props) {
   const catalogQuery = useSoftSkillsCatalog();
@@ -27,8 +31,32 @@ export function SoftSkillsPanel({ userId }: Props) {
   const [similarFor, setSimilarFor] = useState<string | null>(null);
   const [similar, setSimilar] = useState<SkillSuggestion[]>([]);
 
-  const selected = new Set((skillsQuery.data ?? []).map((s) => s.name.toLowerCase()));
-  const idByName = new Map((skillsQuery.data ?? []).map((s) => [s.name.toLowerCase(), s.id]));
+  // chiave canonica → id di tutte le righe che la rappresentano
+  const idsByKey = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const s of skillsQuery.data ?? []) {
+      const k = keyOf(s.name);
+      map.set(k, [...(map.get(k) ?? []), s.id]);
+    }
+    return map;
+  }, [skillsQuery.data]);
+
+  // Una sola lista: prima il catalogo, poi le skill tue che non ci sono.
+  const chips = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const push = (n: string) => {
+      const k = keyOf(n);
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push(canonical(n));
+    };
+    (catalogQuery.data ?? []).forEach((s) => push(s.name));
+    (skillsQuery.data ?? []).forEach((s) => push(s.name));
+    return out;
+  }, [catalogQuery.data, skillsQuery.data]);
+
+  const selectedCount = idsByKey.size;
 
   useEffect(() => {
     setSimilarFor(null);
@@ -36,99 +64,84 @@ export function SoftSkillsPanel({ userId }: Props) {
   }, [userId]);
 
   async function toggle(name: string) {
-    const isOn = selected.has(name.toLowerCase());
+    const ids = idsByKey.get(keyOf(name)) ?? [];
     try {
-      if (isOn) {
-        const id = idByName.get(name.toLowerCase());
-        if (id) await deleteSkill.mutateAsync(id);
+      if (ids.length > 0) {
+        // Togliendola si tolgono anche i doppioni, altrimenti resterebbe accesa.
+        for (const id of ids) await deleteSkill.mutateAsync(id);
       } else {
-        await addSkill.mutateAsync({ name });
-        // Suggerisci simili
+        await addSkill.mutateAsync({ name: canonical(name) });
         try {
           const sims = await suggestSimilar.mutateAsync({ skillName: name, limit: 6 });
-          setSimilarFor(name);
-          setSimilar(sims.filter((s) => !selected.has(s.name.toLowerCase())));
+          setSimilarFor(canonical(name));
+          setSimilar(sims.filter((s) => !idsByKey.has(keyOf(s.name)) && keyOf(s.name) !== keyOf(name)));
         } catch {
-          /* ignora silenziosamente */
+          /* i suggerimenti sono facoltativi */
         }
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Errore soft skill");
+      toast.error(err instanceof Error ? err.message : "Non sono riuscito ad aggiornare le soft skill");
     }
   }
 
+  const freshSimilar = similar.filter((s) => !idsByKey.has(keyOf(s.name)));
+
   return (
-    <Card className="p-8">
-      <header className="mb-4">
-        <h2 className="font-serif text-2xl">Soft skill</h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          Sono tue, non cambiano da un ruolo all'altro.
-        </p>
+    <Card className="p-5 sm:p-8">
+      <header className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="jm-h2">Soft skill</h2>
+          <p className="mt-1 text-sm text-ink-soft">
+            Sono tue, non cambiano da un ruolo all'altro. Tocca per aggiungere o togliere.
+          </p>
+        </div>
+        <span className="font-mono text-xs text-ink-faint">{selectedCount} scelte</span>
       </header>
 
-      {catalogQuery.isLoading ? (
-        <div className="text-ink-faint">Carico il catalogo…</div>
+      {catalogQuery.isLoading || skillsQuery.isLoading ? (
+        <p role="status" className="text-ink-soft">Carico le soft skill…</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {(catalogQuery.data ?? []).map((s) => {
-            const isOn = selected.has(s.name.toLowerCase());
+        <ul className="flex flex-wrap gap-2">
+          {chips.map((name) => {
+            const isOn = idsByKey.has(keyOf(name));
             return (
-              <button
-                key={s.name}
-                type="button"
-                onClick={() => toggle(s.name)}
-                className={
-                  "rounded-full border px-3 py-1 text-xs transition-colors " +
-                  (isOn
-                    ? "border-accent bg-accent text-paper"
-                    : "border-line hover:border-accent hover:text-accent")
-                }
-              >
-                {s.name}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {similarFor && similar.length > 0 && (
-        <div className="mt-6 rounded-sm border border-accent-wash bg-accent-wash/40 p-4">
-          <p className="mb-3 text-xs font-medium text-accent-ink">
-            ✨ Simili a <span className="font-semibold">{similarFor}</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {similar.map((s) => (
-              <button
-                key={s.name}
-                type="button"
-                onClick={() => toggle(s.name)}
-                className="rounded-full border border-accent bg-paper-2 px-3 py-1 text-xs hover:bg-accent hover:text-paper"
-              >
-                + {s.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {selected.size > 0 && (
-        <div className="mt-6">
-          <p className="mb-2 font-mono text-xs uppercase tracking-wider text-ink-faint">
-            Selezionate ({selected.size})
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(skillsQuery.data ?? []).map((s) => (
-              <Badge key={s.id} className="gap-1 pr-1">
-                {s.name}
+              <li key={name}>
                 <button
                   type="button"
-                  onClick={() => deleteSkill.mutate(s.id)}
-                  className="rounded-sm p-0.5 hover:bg-ink/10"
-                  aria-label={`Rimuovi ${s.name}`}
+                  aria-pressed={isOn}
+                  onClick={() => toggle(name)}
+                  className={cn(
+                    "jm-press inline-flex h-10 items-center gap-1.5 rounded-full border px-4 text-sm",
+                    isOn
+                      ? "border-accent bg-accent text-paper-2"
+                      : "border-line-hard bg-paper-2 text-ink hover:border-accent",
+                  )}
                 >
-                  <X className="h-3 w-3" />
+                  {isOn ? <Check className="h-4 w-4" aria-hidden /> : <Plus className="h-4 w-4 text-ink-faint" aria-hidden />}
+                  {name}
                 </button>
-              </Badge>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {similarFor && freshSimilar.length > 0 && (
+        <div className="mt-6 rounded-xl bg-surface p-4">
+          <p className="mb-3 text-sm text-ink">
+            Simili a <span className="font-medium">{similarFor}</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {freshSimilar.map((s) => (
+              <button
+                key={s.name}
+                type="button"
+                onClick={() => toggle(s.name)}
+                className="jm-press inline-flex h-10 items-center gap-1.5 rounded-full border border-line-hard bg-paper-2 px-4 text-sm hover:border-accent"
+              >
+                <Plus className="h-4 w-4 text-ink-faint" aria-hidden />
+                {canonical(s.name)}
+              </button>
             ))}
           </div>
         </div>

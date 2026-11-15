@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Building2, Check, Loader2, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 
-import { Guide } from "@/components/Avatar";
+import { Hint, PageHeader } from "@/components/Page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,7 +29,7 @@ export function CompaniesView() {
   if (!userId) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
-        <Guide>Prima creiamo il tuo profilo, poi scegli le aziende che ti interessano.</Guide>
+        <Hint>Prima crea il tuo profilo, poi scegli le aziende che ti interessano.</Hint>
       </div>
     );
   }
@@ -127,10 +127,10 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
   return (
     <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-8">
-        <Guide>
-          Dimmi che tipo di azienda ti interessa e in che settore. Ti mostro quelle giuste: tu scegli, e
-          costruisci la tua lista.
-        </Guide>
+        <PageHeader
+          title="Aziende"
+          lead="Scegli tipo di azienda e settore: ti mostro quelle giuste e costruisci la tua lista."
+        />
 
         {/* ------- passo 1 ------- */}
         <section aria-labelledby="step-scope" className="space-y-3">
@@ -156,7 +156,7 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
               <select
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-                className="h-9 rounded-sm border border-line bg-paper-2 px-2 text-sm"
+                className="h-11 rounded-xl border border-field bg-paper-2 px-3 text-sm sm:h-10"
               >
                 {(catalog.data?.countries ?? []).map((c) => (
                   <option key={c.code} value={c.code}>{c.name}</option>
@@ -177,7 +177,7 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
                 disabled={!scope}
                 onClick={() => setSector(s.key)}
                 className={
-                  "rounded-full border px-4 py-1.5 text-sm transition-colors disabled:cursor-not-allowed " +
+                  "jm-press inline-flex min-h-10 items-center rounded-full border px-4 py-2 text-sm disabled:cursor-not-allowed " +
                   (sector === s.key
                     ? "border-accent bg-accent text-paper"
                     : "border-line bg-paper-2 hover:border-accent hover:text-accent")
@@ -203,7 +203,7 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
           {browse.isPending && results.length === 0 ? (
             <SkeletonGrid />
           ) : results.length === 0 ? (
-            <div className="rounded border border-dashed border-line-hard bg-paper-2 p-8 text-center text-sm text-ink-faint">
+            <div className="rounded-2xl border border-dashed border-line-hard bg-paper-2 p-8 text-center text-sm text-ink-faint">
               {scope && sector
                 ? "Nessun risultato."
                 : "Scegli un tipo e un settore e qui compariranno le aziende."}
@@ -233,7 +233,7 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
         </section>
 
         {/* ------- ricerca per nome ------- */}
-        <section className="rounded border border-line bg-paper-2 p-5">
+        <section className="rounded-2xl border border-line bg-paper-2 p-5">
           <p className="mb-2 text-sm font-medium">Sai già quale azienda cerchi?</p>
           <div className="flex gap-2">
             <Input
@@ -273,8 +273,8 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
 
 function StepTitle({ n, title, id }: { n: number; title: string; id: string }) {
   return (
-    <h2 id={id} className="flex items-center gap-3 font-serif text-2xl">
-      <span className="grid h-7 w-7 place-items-center rounded-full bg-ink font-sans text-xs font-semibold text-paper">
+    <h2 id={id} className="flex items-center gap-3 jm-h2">
+      <span className="grid h-7 w-7 place-items-center rounded-full bg-surface font-mono text-xs font-medium text-ink">
         {n}
       </span>
       {title}
@@ -291,10 +291,10 @@ function OptionCard({
       onClick={onClick}
       aria-pressed={active}
       className={
-        "rounded border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 " +
+        "jm-press rounded-2xl border p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 " +
         (active
-          ? "border-accent bg-accent-wash shadow-sm"
-          : "border-line bg-paper-2 hover:-translate-y-0.5 hover:border-line-hard")
+          ? "border-accent bg-accent-wash"
+          : "border-line-hard bg-paper-2 hover:border-accent")
       }
     >
       <span className="flex items-center justify-between">
@@ -312,11 +312,11 @@ function CompanyCard({
   return (
     <div
       className={
-        "flex items-start gap-3 rounded border p-4 transition-colors " +
+        "flex items-start gap-3 rounded-2xl border p-4 transition-colors " +
         (selected ? "border-accent bg-accent-wash/50" : "border-line bg-paper-2")
       }
     >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-sm bg-paper text-ink-soft">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface text-ink-soft">
         <Building2 className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
@@ -344,7 +344,7 @@ function SkeletonGrid() {
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-busy="true">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-[88px] animate-pulse rounded border border-line bg-paper-2" />
+        <div key={i} className="h-[88px] animate-pulse rounded-2xl border border-line bg-paper-2" />
       ))}
     </div>
   );
@@ -360,7 +360,7 @@ function MyList({
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="font-serif text-xl">La mia lista</h2>
+        <h2 className="jm-h2">La mia lista</h2>
         <span className="font-mono text-xs text-ink-faint">{companies.length}</span>
       </div>
       {loading ? (
@@ -372,7 +372,7 @@ function MyList({
       ) : (
         <ul className="max-h-[320px] space-y-1 overflow-y-auto pr-1">
           {companies.map((c) => (
-            <li key={c.id} className="flex items-center justify-between rounded-sm px-2 py-1.5 text-sm hover:bg-paper">
+            <li key={c.id} className="flex items-center justify-between rounded-xl py-1 pl-3 pr-1 text-sm hover:bg-paper">
               <span className="min-w-0">
                 <span className="block truncate">{c.name}</span>
                 {c.sector && <span className="block truncate text-xs text-ink-faint">{c.sector}</span>}
@@ -381,7 +381,7 @@ function MyList({
                 type="button"
                 onClick={() => onRemove(c.id)}
                 aria-label={`Rimuovi ${c.name}`}
-                className="rounded-sm p-1 text-ink-faint hover:bg-bad-wash hover:text-bad"
+                className="jm-press grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-bad-wash hover:text-bad"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -431,7 +431,7 @@ function SimilarToMine({
 
   return (
     <Card className="p-5">
-      <h2 className="mb-1 flex items-center gap-2 font-serif text-xl">
+      <h2 className="mb-1 flex items-center gap-2 jm-h2">
         <Sparkles className="h-4 w-4 text-accent" /> Simili alle tue
       </h2>
       <p className="mb-3 text-xs text-ink-soft">In base alle aziende che hai scelto.</p>

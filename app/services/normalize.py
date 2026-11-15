@@ -162,7 +162,7 @@ _COUNTRY_HINTS = {
     "US": ("united states", "usa", "stati uniti", "new york", "san francisco",
            "boston", "chicago", "seattle", "austin", "denver", "atlanta",
            "los angeles", "pittsburgh", "wichita", "texas", "california"),
-    "NL": ("netherlands", "olanda", "paesi bassi", "amsterdam", "rotterdam",
+    "NL": ("netherlands", "nederland", "olanda", "paesi bassi", "amsterdam", "rotterdam",
            "utrecht", "eindhoven", "den haag", "the hague"),
     "IE": ("ireland", "irlanda", "dublin", "dublino", "cork"),
     "BE": ("belgium", "belgio", "brussels", "bruxelles", "antwerp", "gent"),

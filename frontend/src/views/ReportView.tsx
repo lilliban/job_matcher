@@ -1,153 +1,311 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Building2, Globe2, Layers, Trash2 } from "lucide-react";
+import { EyeOff } from "lucide-react";
 
-import { Guide } from "@/components/Avatar";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Hint, Loading, PageHeader } from "@/components/Page";
 import { useDeleteSession, useSessionsOverview, type SessionOverview } from "@/api/queries";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { cn } from "@/lib/utils";
 import { useAppState } from "@/stores/useAppState";
 import { SessionWorkspace } from "./sessions/SessionWorkspace";
 
-const STATUS: Record<string, { label: string; variant: "default" | "good" | "warn" | "bad" | "outline" }> = {
-  draft: { label: "Da avviare", variant: "outline" },
-  running: { label: "In corso", variant: "warn" },
-  completed: { label: "Completata", variant: "good" },
-  error: { label: "Errore", variant: "bad" },
-  cancelled: { label: "Annullata", variant: "outline" },
+const STATUS_LABEL: Record<string, string> = {
+  draft: "Da avviare",
+  running: "In corso",
+  completed: "Completata",
+  error: "Non riuscita",
+  cancelled: "Annullata",
 };
 
-const MODE_ICON: Record<string, React.ReactNode> = {
-  companies: <Building2 className="h-3.5 w-3.5" />,
-  market: <Globe2 className="h-3.5 w-3.5" />,
-  both: <Layers className="h-3.5 w-3.5" />,
-};
 const MODE_LABEL: Record<string, string> = {
   companies: "Mie aziende",
   market: "Tutto il mercato",
-  both: "Aziende + mercato",
+  both: "Aziende e mercato",
 };
 
+/** Ricerche identiche (stesso nome, paese e stato) diventano una riga sola. */
+interface SearchGroup {
+  key: string;
+  latest: SessionOverview;
+  ids: string[];
+  count: number;
+}
+
+function groupSessions(list: SessionOverview[]): SearchGroup[] {
+  const map = new Map<string, SearchGroup>();
+  for (const s of list) {
+    const key = [(s.role_title || "").trim().toLowerCase(), s.preferred_country ?? "", s.status].join("|");
+    const g = map.get(key);
+    if (!g) {
+      map.set(key, { key, latest: s, ids: [s.id], count: 1 });
+    } else {
+      g.ids.push(s.id);
+      g.count += 1;
+      if (s.created_at > g.latest.created_at) g.latest = s;
+    }
+  }
+  return [...map.values()].sort((a, b) => b.latest.created_at.localeCompare(a.latest.created_at));
+}
+
+/** Nascoste di default: mai avviate, oppure finite senza nemmeno un annuncio. */
+function isQuiet(s: SessionOverview): boolean {
+  return s.status === "draft" || (s.listings_count === 0 && s.status !== "running");
+}
+
+/** Storico: l'elenco delle ricerche già fatte. Le nuove si lanciano da Ricerche. */
 export function ReportView() {
   const { userId, isBooting } = useCurrentUser();
   const sessionId = useAppState((s) => s.sessionId);
   const setSessionId = useAppState((s) => s.setSessionId);
+  const hiddenIds = useAppState((s) => s.hiddenSessionIds);
+  const hideSessions = useAppState((s) => s.hideSessions);
+  const unhideSessions = useAppState((s) => s.unhideSessions);
   const overview = useSessionsOverview(userId);
   const deleteSession = useDeleteSession(userId ?? "");
 
-  const sessions = overview.data ?? [];
+  const [showQuiet, setShowQuiet] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
-  // Nessuna selezione valida → apre la più recente.
+  const sessions = useMemo(() => overview.data ?? [], [overview.data]);
+  const hidden = useMemo(() => new Set(hiddenIds), [hiddenIds]);
+
+  const groups = useMemo(() => groupSessions(sessions), [sessions]);
+  const isHidden = (g: SearchGroup) => g.ids.every((id) => hidden.has(id));
+  const hiddenGroups = groups.filter(isHidden);
+  const quietGroups = groups.filter((g) => !isHidden(g) && isQuiet(g.latest));
+  const visibleGroups = groups.filter(
+    (g) => (showHidden || !isHidden(g)) && (showQuiet || !isQuiet(g.latest) || isHidden(g)),
+  );
+
+  // La ricerca aperta: quella scelta, se è ancora in elenco; altrimenti la prima visibile.
+  const openId =
+    sessionId && visibleGroups.some((g) => g.ids.includes(sessionId))
+      ? sessionId
+      : (visibleGroups[0]?.latest.id ?? null);
+
   useEffect(() => {
-    if (sessions.length === 0) return;
-    if (!sessionId || !sessions.some((s) => s.id === sessionId)) {
-      setSessionId(sessions[0].id);
-    }
-  }, [sessions, sessionId, setSessionId]);
+    if (openId && openId !== sessionId) setSessionId(openId);
+  }, [openId, sessionId, setSessionId]);
 
-  if (isBooting || overview.isLoading) return <div className="text-ink-faint">Caricamento…</div>;
+  function handleDelete(id: string) {
+    const s = sessions.find((x) => x.id === id);
+    if (!confirm(`Eliminare la ricerca «${s?.role_title || "qualsiasi ruolo"}»?`)) return;
+    deleteSession.mutate(id, {
+      onSuccess: () => {
+        toast.success("Ricerca eliminata");
+        if (sessionId === id) setSessionId(null);
+      },
+    });
+  }
 
-  if (!userId) {
+  function handleHide(g: SearchGroup) {
+    hideSessions(g.ids);
+    toast("Ricerca nascosta dallo Storico", {
+      action: { label: "Annulla", onClick: () => unhideSessions(g.ids) },
+    });
+  }
+
+  const header = (
+    <PageHeader
+      title="Storico"
+      lead={
+        <>
+          Le ricerche che hai già fatto. Per lanciarne una nuova vai in{" "}
+          <Link to="/ricerche" className="font-medium text-ink underline underline-offset-4">
+            Ricerche
+          </Link>
+          .
+        </>
+      }
+    />
+  );
+
+  if (isBooting || overview.isLoading) {
     return (
-      <div className="mx-auto max-w-3xl">
-        <Guide>Crea prima il tuo profilo: poi qui trovi tutte le tue ricerche.</Guide>
+      <div className="mx-auto max-w-6xl space-y-6">
+        {header}
+        <Loading />
       </div>
     );
   }
 
-  if (sessions.length === 0) {
+  if (!userId || sessions.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6">
-        <Guide>Non hai ancora fatto nessuna ricerca. Quando ne avvii una, la trovi qui.</Guide>
+      <div className="mx-auto max-w-6xl space-y-6">
+        {header}
+        <Hint>
+          {!userId
+            ? "Crea prima il tuo profilo: poi qui trovi tutte le tue ricerche."
+            : "Non hai ancora fatto nessuna ricerca. Quando ne avvii una, la trovi qui."}
+        </Hint>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <aside aria-label="Le tue ricerche" className="space-y-3 lg:sticky lg:top-8 lg:self-start">
-        <h1 className="font-serif text-3xl">Le tue ricerche</h1>
-        <ul className="space-y-2">
-          {sessions.map((s) => (
-            <li key={s.id}>
-              <SearchRow
-                s={s}
-                active={s.id === sessionId}
-                onOpen={() => setSessionId(s.id)}
-                onDelete={() => {
-                  if (!confirm(`Eliminare la ricerca «${s.role_title || "qualsiasi ruolo"}»?`)) return;
-                  deleteSession.mutate(s.id, {
-                    onSuccess: () => {
-                      toast.success("Ricerca eliminata");
-                      if (sessionId === s.id) setSessionId(null);
-                    },
-                  });
-                }}
-              />
-            </li>
-          ))}
-        </ul>
-      </aside>
+    <div className="mx-auto max-w-6xl space-y-6">
+      {header}
 
-      <section aria-label="Dettaglio ricerca" className="min-w-0">
-        {sessionId && sessions.some((s) => s.id === sessionId) && (
-          <SessionWorkspace key={sessionId} userId={userId} sessionId={sessionId} />
-        )}
-      </section>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <aside aria-label="Le tue ricerche" className="space-y-3 lg:sticky lg:top-8 lg:self-start">
+          <div className="flex flex-wrap gap-2">
+            {quietGroups.length > 0 && (
+              <ToggleChip active={showQuiet} onClick={() => setShowQuiet((v) => !v)}>
+                Senza annunci o da avviare
+                <span className="font-mono text-xs opacity-80">{quietGroups.length}</span>
+              </ToggleChip>
+            )}
+            {hiddenGroups.length > 0 && (
+              <ToggleChip active={showHidden} onClick={() => setShowHidden((v) => !v)}>
+                Nascoste
+                <span className="font-mono text-xs opacity-80">{hiddenGroups.length}</span>
+              </ToggleChip>
+            )}
+          </div>
+
+          {visibleGroups.length === 0 ? (
+            <p className="rounded-xl bg-surface px-4 py-3 text-sm text-ink-soft">
+              Nessuna ricerca da mostrare con questi filtri.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {visibleGroups.map((g) => (
+                <li key={g.key}>
+                  <SearchRow
+                    g={g}
+                    active={!!openId && g.ids.includes(openId)}
+                    hidden={isHidden(g)}
+                    onOpen={() => setSessionId(g.latest.id)}
+                    onHide={() => handleHide(g)}
+                    onUnhide={() => unhideSessions(g.ids)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+
+        <section aria-label="Dettaglio ricerca" className="min-w-0">
+          {openId && (
+            <SessionWorkspace
+              key={openId}
+              userId={userId}
+              sessionId={openId}
+              onDelete={() => handleDelete(openId)}
+            />
+          )}
+        </section>
+      </div>
     </div>
   );
 }
 
-function SearchRow({
-  s, active, onOpen, onDelete,
-}: { s: SessionOverview; active: boolean; onOpen: () => void; onDelete: () => void }) {
-  const st = STATUS[s.status] ?? { label: s.status, variant: "outline" as const };
+function ToggleChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <Card
-      className={
-        "group relative transition-colors " +
-        (active ? "border-accent ring-2 ring-accent/20" : "hover:border-line-hard")
-      }
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "jm-press inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium",
+        active ? "border-accent bg-accent text-paper-2" : "border-line-hard bg-paper-2 text-ink hover:border-accent",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SearchRow({
+  g,
+  active,
+  hidden,
+  onOpen,
+  onHide,
+  onUnhide,
+}: {
+  g: SearchGroup;
+  active: boolean;
+  hidden: boolean;
+  onOpen: () => void;
+  onHide: () => void;
+  onUnhide: () => void;
+}) {
+  const s = g.latest;
+  const isError = s.status === "error";
+  return (
+    <div
+      className={cn(
+        "relative flex items-start gap-2 rounded-2xl border bg-paper-2 p-1 transition-colors",
+        active ? "border-accent" : "border-line hover:border-line-hard",
+        hidden && "opacity-70",
+      )}
     >
       <button
         type="button"
         onClick={onOpen}
-        aria-current={active}
-        className="block w-full p-4 pr-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        aria-current={active ? "true" : undefined}
+        className="min-w-0 flex-1 rounded-xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
       >
-        <span className="block truncate font-serif text-lg">
-          {s.role_title || "Qualsiasi ruolo adatto a te"}
+        <span className="flex items-baseline gap-2">
+          <span className="truncate text-[15px] font-medium">{s.role_title || "Qualsiasi ruolo adatto a te"}</span>
+          {g.count > 1 && (
+            <span
+              className="shrink-0 rounded-full bg-surface px-2 py-0.5 font-mono text-xs text-ink-soft"
+              title={`${g.count} ricerche uguali: mostro la più recente`}
+            >
+              ×{g.count}
+            </span>
+          )}
         </span>
-        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-faint">
-          <span className="flex items-center gap-1">
-            {MODE_ICON[s.search_mode] ?? null}
-            {MODE_LABEL[s.search_mode] ?? s.search_mode}
+        <span className="mt-1 block truncate text-xs text-ink-faint">
+          {MODE_LABEL[s.search_mode] ?? s.search_mode}
+          {s.preferred_country && ` · ${s.preferred_country}`}
+          {` · ${new Date(s.created_at).toLocaleDateString("it-IT")}`}
+        </span>
+        <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className={cn(isError ? "text-bad" : "text-ink-soft")}>
+            {STATUS_LABEL[s.status] ?? s.status}
           </span>
-          {s.preferred_country && <span>· {s.preferred_country}</span>}
-          <span>· {new Date(s.created_at).toLocaleDateString("it-IT")}</span>
-        </span>
-        <span className="mt-3 flex flex-wrap items-center gap-2">
-          <Badge variant={st.variant}>{st.label}</Badge>
-          <span className="text-xs text-ink-soft">
+          <span className="text-ink-faint">·</span>
+          <span className="text-ink-soft">
             <strong className="font-semibold text-ink">{s.matches_count}</strong> match su {s.listings_count} annunci
           </span>
-          {s.new_matches > 0 && <Badge variant="good">{s.new_matches} da vedere</Badge>}
+          {s.new_matches > 0 && (
+            <span className="rounded-full bg-good-wash px-2 py-0.5 font-medium text-good">
+              {s.new_matches} da vedere
+            </span>
+          )}
         </span>
-        {s.best_score != null && (
-          <span className="mt-2 block text-xs text-ink-faint">
-            Migliore: {Math.round(s.best_score * 100)}%
-          </span>
-        )}
       </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label="Elimina ricerca"
-        className="absolute right-2 top-2 rounded-sm p-1.5 text-ink-faint opacity-0 hover:bg-bad-wash hover:text-bad focus-visible:opacity-100 group-hover:opacity-100"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
-    </Card>
+      {hidden ? (
+        <button
+          type="button"
+          onClick={onUnhide}
+          className="jm-press m-1 inline-flex h-10 shrink-0 items-center rounded-full px-3 text-sm text-ink-soft hover:bg-surface hover:text-ink"
+        >
+          Mostra
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onHide}
+          aria-label={`Nascondi la ricerca ${s.role_title || "qualsiasi ruolo"}`}
+          title="Nascondi dallo Storico"
+          className="jm-press m-1 grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-surface hover:text-ink"
+        >
+          <EyeOff className="h-4 w-4" aria-hidden />
+        </button>
+      )}
+    </div>
   );
 }

@@ -50,9 +50,9 @@ export function ExperiencesPanel({ userId }: { userId: string }) {
   }
 
   return (
-    <Card className="p-8">
+    <Card className="p-5 sm:p-8">
       <header className="mb-4">
-        <h2 className="font-serif text-2xl">Esperienze</h2>
+        <h2 className="jm-h2">Esperienze</h2>
       </header>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -65,19 +65,19 @@ export function ExperiencesPanel({ userId }: { userId: string }) {
           <Input value={form.role} onChange={(e) => update("role", e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label>Da</Label>
+          <Label>Da (mese/anno)</Label>
           <Input
             value={form.start_date}
             onChange={(e) => update("start_date", e.target.value)}
-            placeholder="03/2023"
+            placeholder="mm/aaaa"
           />
         </div>
         <div className="space-y-1.5">
-          <Label>A</Label>
+          <Label>A (vuoto se in corso)</Label>
           <Input
             value={form.end_date}
             onChange={(e) => update("end_date", e.target.value)}
-            placeholder="in corso"
+            placeholder="mm/aaaa"
           />
         </div>
         <div className="space-y-1.5 md:col-span-2">
@@ -89,11 +89,11 @@ export function ExperiencesPanel({ userId }: { userId: string }) {
           />
         </div>
         <div className="space-y-1.5 md:col-span-2">
-          <Label>Tecnologie usate</Label>
+          <Label>Tecnologie usate, separate da virgola</Label>
           <Input
             value={form.skills_used}
             onChange={(e) => update("skills_used", e.target.value)}
-            placeholder="PHP, Yii, MySQL"
+            placeholder="Strumenti e linguaggi"
           />
         </div>
       </div>
@@ -108,7 +108,7 @@ export function ExperiencesPanel({ userId }: { userId: string }) {
         {(listQuery.data ?? []).map((e) => (
           <li
             key={e.id}
-            className="flex items-start justify-between gap-3 rounded-sm border border-line bg-paper-2 p-3 text-sm"
+            className="flex items-start justify-between gap-3 rounded-xl border border-line bg-paper-2 p-3 text-sm"
           >
             <div>
               <div className="font-medium">
@@ -122,7 +122,7 @@ export function ExperiencesPanel({ userId }: { userId: string }) {
             <button
               type="button"
               onClick={() => deleteExp.mutate(e.id)}
-              className="rounded-sm p-1 text-ink-faint hover:bg-line/50 hover:text-bad"
+              className="jm-press grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-bad-wash hover:text-bad"
               aria-label="Rimuovi esperienza"
             >
               <X className="h-4 w-4" />

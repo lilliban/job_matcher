@@ -39,9 +39,9 @@ export function EducationPanel({ userId }: { userId: string }) {
   }
 
   return (
-    <Card className="p-8">
+    <Card className="p-5 sm:p-8">
       <header className="mb-4">
-        <h2 className="font-serif text-2xl">Formazione</h2>
+        <h2 className="jm-h2">Formazione</h2>
       </header>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -76,7 +76,7 @@ export function EducationPanel({ userId }: { userId: string }) {
         {(listQuery.data ?? []).map((e) => (
           <li
             key={e.id}
-            className="flex items-center justify-between rounded-sm border border-line bg-paper-2 px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-xl border border-line bg-paper-2 py-1 pl-4 pr-1 text-sm"
           >
             <span>
               <span className="font-medium">{e.degree}</span>
@@ -87,7 +87,7 @@ export function EducationPanel({ userId }: { userId: string }) {
             <button
               type="button"
               onClick={() => deleteEdu.mutate(e.id)}
-              className="rounded-sm p-1 text-ink-faint hover:bg-line/50 hover:text-bad"
+              className="jm-press grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-bad-wash hover:text-bad"
               aria-label="Rimuovi titolo"
             >
               <X className="h-4 w-4" />

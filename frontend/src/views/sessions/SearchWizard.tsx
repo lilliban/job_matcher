@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Building2, Check, Globe2, Loader2, Newspaper, Plus, Rocket, Sparkles, X } from "lucide-react";
 
-import { Guide } from "@/components/Avatar";
+import { Hint } from "@/components/Page";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,7 @@ const CONTRACTS = [
 ] as const;
 
 const selectClass =
-  "h-9 w-full rounded-sm border border-line bg-paper-2 px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  "h-11 w-full rounded-xl border border-field bg-paper-2 px-3 text-sm sm:h-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
 interface Country {
   code: string;
@@ -40,7 +40,14 @@ function extractCountries(tree: unknown): Country[] {
   const t = (tree ?? {}) as { countries?: Country[] };
   return (Array.isArray(t.countries) ? t.countries : [])
     .filter((c) => c && typeof c.code === "string" && typeof c.name === "string")
-    .sort((a, b) => a.name.localeCompare(b.name, "it"));
+    .sort((a, b) => countryRank(a.code) - countryRank(b.code) || a.name.localeCompare(b.name, "it"));
+}
+
+// Paesi in cima al menu, in quest'ordine; gli altri seguono in ordine alfabetico.
+const TOP_COUNTRIES = ["CH", "DE", "NL"];
+function countryRank(code: string): number {
+  const i = TOP_COUNTRIES.indexOf(code);
+  return i === -1 ? TOP_COUNTRIES.length : i;
 }
 
 export function SearchWizard({ userId }: { userId: string }) {
@@ -60,7 +67,7 @@ export function SearchWizard({ userId }: { userId: string }) {
   const [mode, setMode] = useState<"companies" | "market">("market");
   const [role, setRole] = useState("");          // testo libero o ruolo scelto
   const [anyRole, setAnyRole] = useState(false); // "qualsiasi ruolo adatto a me"
-  const [country, setCountry] = useState("IT");
+  const [country, setCountry] = useState("CH");
   const [zone, setZone] = useState("");
   const [contract, setContract] = useState("");
   const [threshold, setThreshold] = useState(50);
@@ -113,8 +120,8 @@ export function SearchWizard({ userId }: { userId: string }) {
       await startSession.mutateAsync(created.id);
       setSessionId(created.id);
       markNewsSeen();
-      toast.success("Ricerca avviata: ti porto al resoconto");
-      navigate("/intelligence");
+      toast.success("Ricerca avviata: ti porto allo storico");
+      navigate("/storico");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Non sono riuscito ad avviare la ricerca");
     }
@@ -129,10 +136,10 @@ export function SearchWizard({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
-      <Guide>
-        Dimmi <strong>dove</strong> e <strong>cosa</strong> cercare, al resto penso io. Appena parte la
-        ricerca ti porto al resoconto.
-      </Guide>
+      <Hint>
+        Scegli <strong>dove</strong> e <strong>cosa</strong> cercare. Appena parte la ricerca ti porto
+        allo Storico.
+      </Hint>
 
       {hasNews && (
         <NewsBanner
@@ -143,7 +150,7 @@ export function SearchWizard({ userId }: { userId: string }) {
         />
       )}
 
-      <Card className="space-y-8 p-6 md:p-8">
+      <Card className="space-y-8 p-5 md:p-8">
         {/* 1 — dove */}
         <Step n={1} title="Dove cerchiamo?">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -169,7 +176,7 @@ export function SearchWizard({ userId }: { userId: string }) {
           {needsCompanies && (
             <p className="text-sm text-warn">
               La tua lista è vuota.{" "}
-              <button type="button" className="underline" onClick={() => navigate("/collections")}>
+              <button type="button" className="font-medium underline underline-offset-4" onClick={() => navigate("/aziende")}>
                 Vai ad Aziende
               </button>{" "}
               per sceglierne qualcuna, oppure cerca su tutto il mercato.
@@ -266,7 +273,7 @@ export function SearchWizard({ userId }: { userId: string }) {
           <button
             type="button"
             onClick={() => setShowAdvanced((v) => !v)}
-            className="text-sm text-ink-soft underline underline-offset-4"
+            className="inline-flex h-10 items-center text-sm text-ink-soft underline underline-offset-4 hover:text-ink"
             aria-expanded={showAdvanced}
           >
             {showAdvanced ? "Nascondi opzioni" : "Altre opzioni (contratto, precisione)"}
@@ -295,8 +302,14 @@ export function SearchWizard({ userId }: { userId: string }) {
 
         {/* lancio */}
         <div className="flex flex-col gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-ink-soft">{summary}</p>
-          <Button size="lg" onClick={launch} disabled={!canLaunch}>
+          <p className="text-sm text-ink-soft" aria-live="polite">
+            {needsRole
+              ? "Scegli un ruolo o «Qualsiasi ruolo adatto a me» per avviare la ricerca."
+              : needsCompanies
+                ? "La tua lista aziende è vuota: aggiungine qualcuna o cerca su tutte le aziende."
+                : summary}
+          </p>
+          <Button size="lg" onClick={launch} disabled={!canLaunch} className="w-full sm:w-auto">
             {createSession.isPending || startSession.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -315,8 +328,8 @@ export function SearchWizard({ userId }: { userId: string }) {
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="flex items-center gap-3 font-serif text-2xl">
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-ink font-sans text-xs font-semibold text-paper">
+      <h2 className="jm-h2 flex items-center gap-3">
+        <span className="grid h-7 w-7 place-items-center rounded-full bg-surface font-mono text-xs font-medium text-ink">
           {n}
         </span>
         {title}
@@ -335,8 +348,8 @@ function ModeCard({
       onClick={onClick}
       aria-pressed={active}
       className={
-        "flex items-start gap-3 rounded border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 " +
-        (active ? "border-accent bg-accent-wash shadow-sm" : "border-line bg-paper-2 hover:border-line-hard")
+        "jm-press flex items-start gap-3 rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 " +
+        (active ? "border-accent bg-accent-wash" : "border-line bg-paper-2 hover:border-line-hard")
       }
     >
       <span className={"mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full " + (active ? "bg-accent text-paper" : "bg-paper text-ink-soft")}>
@@ -366,7 +379,7 @@ function RoleChip({
       title={title}
       aria-pressed={active}
       className={
-        "flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 " +
+        "jm-press flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 " +
         (active
           ? "border-accent bg-accent text-paper"
           : "border-line bg-paper-2 hover:border-accent hover:text-accent")
@@ -375,7 +388,7 @@ function RoleChip({
       {icon}
       {label}
       {!!news && news > 0 && (
-        <span className={"rounded-full px-1.5 text-[11px] font-semibold " + (active ? "bg-paper/25" : "bg-good-wash text-good")}>
+        <span className={"rounded-full px-2 py-0.5 text-xs font-medium " + (active ? "bg-paper-2/20" : "bg-good-wash text-good")}>
           {news > 99 ? "99+" : news} nuovi
         </span>
       )}
@@ -392,12 +405,12 @@ function NewsBanner({
   onDismiss: () => void;
 }) {
   return (
-    <div className="flex items-start gap-4 rounded border border-good/30 bg-good-wash p-5">
-      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-good text-paper">
+    <div className="flex items-start gap-4 rounded-2xl bg-surface p-5">
+      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-paper-2">
         <Newspaper className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-good">
+        <p className="font-medium text-ink">
           {total} {total === 1 ? "nuovo annuncio" : "nuovi annunci"} per i tuoi ruoli
           {since ? " dall'ultima volta" : ""}
         </p>
@@ -413,7 +426,7 @@ function NewsBanner({
         )}
         <p className="mt-2 text-xs text-ink-soft">Lancia una ricerca qui sotto per vedere come ti stanno.</p>
       </div>
-      <button type="button" onClick={onDismiss} aria-label="Nascondi novità" className="rounded-sm p-1 text-ink-faint hover:bg-good/10">
+      <button type="button" onClick={onDismiss} aria-label="Nascondi novità" className="jm-press -m-2 grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-paper-2 hover:text-ink">
         <X className="h-4 w-4" />
       </button>
     </div>
@@ -427,14 +440,14 @@ function GapNotice({
 }: { role: string; missing: string[]; onAdd: (name: string) => void; onDismiss: () => void }) {
   if (missing.length === 0) return null;
   return (
-    <div className="rounded border border-warn/30 bg-warn-wash p-4">
+    <div className="rounded-2xl border border-warn/30 bg-warn-wash p-4">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm">
           Per <strong>{role}</strong> di solito servono parecchie competenze che non ho nel tuo profilo.
           Se ne conosci qualcuna, aggiungila: troverò annunci più adatti. Altrimenti cerca pure, ti dirò
           cosa ti manca per ogni annuncio.
         </p>
-        <button type="button" onClick={onDismiss} aria-label="Chiudi avviso" className="rounded-sm p-1 text-ink-faint hover:bg-warn/10">
+        <button type="button" onClick={onDismiss} aria-label="Chiudi avviso" className="jm-press -m-2 grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-paper-2 hover:text-ink">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -444,7 +457,7 @@ function GapNotice({
             key={m}
             type="button"
             onClick={() => onAdd(m)}
-            className="flex items-center gap-1 rounded-full border border-warn/40 bg-paper-2 px-3 py-1 text-xs hover:bg-warn hover:text-paper"
+            className="jm-press inline-flex h-10 items-center gap-1 rounded-full border border-warn/40 bg-paper-2 px-4 text-sm hover:bg-warn hover:text-paper-2"
           >
             <Plus className="h-3 w-3" /> Ho {m}
           </button>

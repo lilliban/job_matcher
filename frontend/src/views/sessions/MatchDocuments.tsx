@@ -49,7 +49,7 @@ export function MatchDocuments({ matchId }: { matchId: string }) {
   if (docs.isLoading) return <div className="text-xs text-ink-faint">Carico documenti…</div>;
   if (!docs.data || docs.data.length === 0) {
     return (
-      <div className="rounded border border-dashed border-line p-4 text-sm text-ink-faint">
+      <div className="rounded-2xl border border-dashed border-line p-4 text-sm text-ink-faint">
         Nessun documento ancora generato per questo match.
       </div>
     );
@@ -57,14 +57,14 @@ export function MatchDocuments({ matchId }: { matchId: string }) {
 
   return (
     <div>
-      <p className="mb-2 font-mono text-xs uppercase tracking-wider text-ink-faint">
+      <p className="mb-2 text-xs font-medium text-ink-faint">
         Documenti generati
       </p>
       <ul className="space-y-2">
         {docs.data.map((d) => (
           <li
             key={d.id}
-            className="flex items-center justify-between rounded-sm border border-line bg-paper-2 px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-xl border border-line bg-paper-2 py-1 pl-4 pr-1 text-sm"
           >
             <div>
               <span className="font-medium">{DOC_LABEL[d.doc_type] ?? d.doc_type}</span>
@@ -100,19 +100,19 @@ function DocumentViewer({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 p-4 sm:items-center"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded border border-line bg-paper shadow-lg"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-line bg-paper"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-line p-4">
           <div>
-            <p className="font-mono text-xs uppercase tracking-wider text-ink-faint">
+            <p className="text-xs font-medium text-ink-faint">
               {doc.doc_type}
             </p>
-            <h3 className="font-serif text-xl">{DOC_LABEL[doc.doc_type] ?? doc.doc_type}</h3>
+            <h3 className="jm-h2">{DOC_LABEL[doc.doc_type] ?? doc.doc_type}</h3>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             Chiudi

@@ -1,41 +1,42 @@
 @import "tailwindcss";
 
 /*
- * Design tokens JobMatcher (migrati da frontend/style.css).
- * Tailwind v4 li registra come utility class native (bg-ink, text-paper, ecc.).
+ * Design tokens JobMatcher — palette "Teal on paper", Instrument Sans + DM Mono.
+ * Un solo accento (teal). Ambra solo per avvisi ("Sotto soglia"), rosso scuro
+ * solo per errori. Niente ombre: la profondità la danno superfici e bordi.
+ * Tailwind v4 registra i token come utility (bg-paper, text-ink, bg-accent…).
  */
 @theme {
-  --color-ink: #16171a;
-  --color-ink-soft: #4a4d55;
-  --color-ink-faint: #8b8f99;
-  --color-paper: #f7f6f3;
+  --color-ink: #06525c;
+  --color-ink-soft: #1d646e;
+  --color-ink-faint: #2f737d;
+  --color-paper: #f7f9f8;
   --color-paper-2: #ffffff;
-  --color-line: #e2e0da;
-  --color-line-hard: #c9c6bd;
+  --color-surface: #ebf0ee;
+  --color-line: #dde5e2;
+  --color-line-hard: #b9c9c5;
+  /* bordo dei campi: ≥3:1 sul bianco (WCAG 1.4.11) */
+  --color-field: #6f8f8b;
 
-  --color-accent: #2f3aa8;
-  --color-accent-ink: #1e2578;
-  --color-accent-wash: #eceef9;
+  --color-accent: #06525c;
+  --color-accent-ink: #043e46;
+  --color-accent-wash: #ebf0ee;
 
-  --color-good: #1f7a4d;
-  --color-good-wash: #e7f3ec;
-  --color-warn: #9a6212;
+  /* "buono" resta nella famiglia teal: nessun secondo accento */
+  --color-good: #06525c;
+  --color-good-wash: #e1ecea;
+  --color-warn: #8a5410;
   --color-warn-wash: #fbf1e0;
-  --color-bad: #a32f2f;
+  --color-bad: #8f2a2a;
   --color-bad-wash: #f8ebeb;
 
-  --font-serif: "Instrument Serif", Georgia, serif;
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
-  --radius-sm: 4px;
-  --radius: 4px;
+  --radius-sm: 8px;
+  --radius: 12px;
 }
 
-/*
- * Body defaults — allineati alla vecchia SPA (font, colori, dimensioni).
- * Tailwind Preflight fornisce già margin/padding/box-sizing reset.
- */
 body {
   font-family: var(--font-sans);
   color: var(--color-ink);
@@ -43,47 +44,36 @@ body {
   font-size: 15px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Animazioni dell'avatar */
-@keyframes jm-blink {
-  0%, 92%, 100% { transform: scaleY(1); }
-  96% { transform: scaleY(0.1); }
-}
-.jm-blink { transform-box: fill-box; transform-origin: center; animation: jm-blink 4.5s infinite; }
-
-@keyframes jm-wave {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-18deg); }
-  75% { transform: rotate(14deg); }
-}
-.jm-wave { animation: jm-wave 1.6s ease-in-out infinite; }
-
-@media (prefers-reduced-motion: reduce) {
-  .jm-blink, .jm-wave { animation: none; }
+::selection {
+  background: #cfe0dd;
+  color: var(--color-accent-ink);
 }
 
-/*
- * Vista "I tuoi match" — palette "Teal on paper" e Instrument Sans + DM Mono.
- * I token sono ridefiniti solo dentro .jm-matches: le utility Tailwind
- * (bg-paper, text-ink, bg-accent, font-sans…) e i componenti ui li
- * ereditano, il resto dell'app resta com'è.
- */
-.jm-matches {
-  --color-ink: #06525c;
-  --color-ink-soft: #1d646e;
-  --color-ink-faint: #2f737d;
-  --color-paper: #f7f9f8;
-  --color-paper-2: #ffffff;
-  --color-line: #dde5e2;
-  --color-line-hard: #b9c9c5;
+/* Focus sempre visibile, anche sugli elementi senza ring esplicito */
+:where(a, button, select, input, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
 
-  --color-accent: #06525c;
-  --color-accent-ink: #043e46;
-  --color-accent-wash: #ebf0ee;
+/* Titolo di pagina condiviso */
+.jm-title {
+  font-size: clamp(2.25rem, 4vw, 3rem);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-stretch: 96%;
+  text-wrap: balance;
+}
 
-  --font-sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
-  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+/* Titolo di sezione */
+.jm-h2 {
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
 }
 
 /* Risposta immediata alla pressione, non al rilascio */
