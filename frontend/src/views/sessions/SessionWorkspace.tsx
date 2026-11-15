@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { EmptyBox } from "@/components/illustrations";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -258,7 +259,8 @@ export function SessionWorkspace({
         </div>
 
         {filteredMatches.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-line p-8 text-center text-sm text-ink-faint">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line-hard px-6 py-6 text-center text-sm text-ink-soft">
+            <EmptyBox className="w-24 sm:w-28" />
             Nessun annuncio sopra soglia, per ora. Se la ricerca è finita guarda «Com'è andata» per capire perché.
           </div>
         ) : (

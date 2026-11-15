@@ -623,6 +623,8 @@ export interface FeedMatch {
   matched_skills: string[];
   missing_required: string[];
   missing_nice: string[];
+  /** Skill dell'annuncio su cui è calcolata la copertura (richieste + gradite); sotto 3 la percentuale è poco affidabile */
+  skills_measured: number;
   first_seen_at: string | null;
 }
 

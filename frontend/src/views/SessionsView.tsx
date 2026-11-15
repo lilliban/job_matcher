@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link2, Search } from "lucide-react";
 
 import { Hint, Loading, PageHeader } from "@/components/Page";
+import { SearchListings } from "@/components/illustrations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 import { ApplyPanel } from "./ApplyView";
@@ -24,6 +25,7 @@ export function SessionsView() {
       <PageHeader
         title="Ricerche"
         lead="Lancia una nuova ricerca di annunci. Quelle già fatte le trovi in Storico."
+        art={<SearchListings className="w-full" />}
       />
 
       {isBooting ? (

@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { EyeOff } from "lucide-react";
 
-import { Hint, Loading, PageHeader } from "@/components/Page";
+import { EmptyState, Loading, PageHeader } from "@/components/Page";
+import { Clock } from "@/components/illustrations";
 import { useDeleteSession, useSessionsOverview, type SessionOverview } from "@/api/queries";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
@@ -134,11 +135,11 @@ export function ReportView() {
     return (
       <div className="mx-auto max-w-6xl space-y-6">
         {header}
-        <Hint>
+        <EmptyState art={<Clock className="w-full" />}>
           {!userId
             ? "Crea prima il tuo profilo: poi qui trovi tutte le tue ricerche."
             : "Non hai ancora fatto nessuna ricerca. Quando ne avvii una, la trovi qui."}
-        </Hint>
+        </EmptyState>
       </div>
     );
   }
@@ -165,9 +166,10 @@ export function ReportView() {
           </div>
 
           {visibleGroups.length === 0 ? (
-            <p className="rounded-xl bg-surface px-4 py-3 text-sm text-ink-soft">
+            <div className="flex items-center gap-3 rounded-xl bg-surface px-4 py-3 text-sm text-ink-soft">
+              <Clock className="w-14" />
               Nessuna ricerca da mostrare con questi filtri.
-            </p>
+            </div>
           ) : (
             <ul className="space-y-2">
               {visibleGroups.map((g) => (

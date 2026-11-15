@@ -5,7 +5,8 @@ import { ArrowUpRight, RotateCw, X } from "lucide-react";
 
 import { ApiError } from "@/api/client";
 import { useFeedMatches, type FeedMatch } from "@/api/queries";
-import { Hint, Loading, PageHeader } from "@/components/Page";
+import { EmptyState, Hint, Loading, PageHeader } from "@/components/Page";
+import { DocumentsLens } from "@/components/illustrations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 
@@ -158,9 +159,9 @@ export function MatchesView() {
   if (feed.isLoading) {
     return (
       <Shell>
-        <div className="mt-8">
-          <Loading>Carico i tuoi match… La prima volta scarico il feed, ci vuole qualche secondo.</Loading>
-        </div>
+        <EmptyState status className="mt-8" art={<DocumentsLens className="w-full" />}>
+          Carico i tuoi match… La prima volta scarico il feed, ci vuole qualche secondo.
+        </EmptyState>
       </Shell>
     );
   }
@@ -192,13 +193,15 @@ export function MatchesView() {
   if (all.length === 0) {
     return (
       <Shell>
-        <Hint className="mt-8">
-          Nessun match per ora. Aggiungi le tue competenze nel{" "}
-          <Link to="/profilo" className="font-medium underline underline-offset-4">
-            profilo
-          </Link>
-          : il confronto parte da lì.
-        </Hint>
+        <EmptyState className="mt-8" art={<DocumentsLens className="w-full" />}>
+          <span className="text-ink">
+            Nessun match per ora. Aggiungi le tue competenze nel{" "}
+            <Link to="/profilo" className="font-medium underline underline-offset-4">
+              profilo
+            </Link>
+            : il confronto parte da lì.
+          </span>
+        </EmptyState>
       </Shell>
     );
   }
@@ -260,7 +263,7 @@ export function MatchesView() {
 
       {filtered.length === 0 ? (
         <div className="mt-8 flex flex-col items-start gap-4">
-          <p className="text-ink-soft">Nessun annuncio con questi filtri.</p>
+          <EmptyState art={<DocumentsLens className="w-full" />}>Nessun annuncio con questi filtri.</EmptyState>
           <button
             type="button"
             onClick={resetFilters}
@@ -383,6 +386,73 @@ function CoverageBar({ m, size = "sm" }: { m: FeedMatch; size?: "sm" | "lg" }) {
   );
 }
 
+/** Sotto questa soglia di skill misurate la percentuale dice poco (vedi pipeline.py). */
+const LOW_DATA_SKILLS = 3;
+
+function isLowData(m: FeedMatch): boolean {
+  return m.coverage != null && m.skills_measured < LOW_DATA_SKILLS;
+}
+
+/** "1 di 1 skill": su quante skill dell'annuncio è calcolata la percentuale. */
+function skillsBasis(m: FeedMatch): string {
+  return `${m.matched_skills.length} di ${m.skills_measured} skill`;
+}
+
+function LowDataTag() {
+  return (
+    <span
+      className="rounded-full border border-dashed border-line-hard px-2 py-0.5 text-xs font-medium text-ink-soft"
+      title="La percentuale è calcolata su meno di 3 skill dell'annuncio"
+    >
+      Pochi dati
+    </span>
+  );
+}
+
+function BelowTag() {
+  return (
+    <span className="rounded-full bg-warn-wash px-2 py-0.5 text-xs font-medium text-warn">Sotto soglia</span>
+  );
+}
+
+/** Colonna in alto a destra della card: percentuale, barra corta, etichette. */
+function CardScore({ m }: { m: FeedMatch }) {
+  const pct = coveragePct(m);
+  if (pct == null) {
+    return (
+      <div className="w-24 shrink-0 text-right">
+        <span className="font-mono text-lg leading-none text-ink-faint">—</span>
+        <p className="mt-1 text-xs text-ink-faint">non misurabile</p>
+      </div>
+    );
+  }
+  const low = isLowData(m);
+  return (
+    <div className="flex w-24 shrink-0 flex-col items-end gap-1.5">
+      <span className="font-mono text-xl leading-none tracking-[-0.02em] tabular-nums">{pct}%</span>
+      <div
+        role="progressbar"
+        aria-label="Copertura delle skill richieste"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        aria-valuetext={low ? `${pct}%, calcolata su ${skillsBasis(m)}` : `${pct}%`}
+        className="h-1.5 w-full overflow-hidden rounded-full bg-accent-wash"
+      >
+        {pct > 0 && (
+          <div
+            className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-warn" : "bg-accent")}
+            style={{ width: `${pct}%` }}
+          />
+        )}
+      </div>
+      {low && <span className="font-mono text-xs text-ink-soft">{skillsBasis(m)}</span>}
+      {low && <LowDataTag />}
+      {m.below_threshold && <BelowTag />}
+    </div>
+  );
+}
+
 function MatchCard({ m, onOpen }: { m: FeedMatch; onOpen: () => void }) {
   const skills = m.matched_skills.slice(0, CARD_SKILLS);
   const extra = m.matched_skills.length - skills.length;
@@ -390,42 +460,35 @@ function MatchCard({ m, onOpen }: { m: FeedMatch; onOpen: () => void }) {
 
   return (
     <article className="group relative flex flex-col rounded-2xl border border-line bg-paper-2 p-4 transition-colors hover:border-line-hard">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="text-[17px] font-medium leading-snug tracking-[-0.01em] [overflow-wrap:anywhere]">
-          {/* Il pulsante copre tutta la card: un clic ovunque apre il dettaglio */}
-          <button
-            type="button"
-            onClick={onOpen}
-            className="text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent"
-          >
-            {m.title ?? "Annuncio senza titolo"}
-          </button>
-        </h2>
-        {m.below_threshold && (
-          <span className="shrink-0 rounded-full bg-warn-wash px-2.5 py-1 text-xs font-medium text-warn">
-            Sotto soglia
-          </span>
-        )}
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[17px] font-medium leading-snug tracking-[-0.01em] [overflow-wrap:anywhere]">
+            {/* Il pulsante copre tutta la card: un clic ovunque apre il dettaglio */}
+            <button
+              type="button"
+              onClick={onOpen}
+              className="text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent"
+            >
+              {m.title ?? "Annuncio senza titolo"}
+            </button>
+          </h2>
+          <p className="mt-0.5 text-sm text-ink-soft [overflow-wrap:anywhere]">
+            {m.company_name ?? "Azienda non indicata"} · {place}
+            {m.kind === "thesis" && " · Tesi o dottorato"}
+          </p>
+          {skills.length > 0 && (
+            <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Skill che hai">
+              {skills.map((s) => (
+                <li key={s} className="rounded-full bg-good-wash px-2.5 py-1 font-mono text-xs text-good">
+                  {s}
+                </li>
+              ))}
+              {extra > 0 && <li className="px-1 py-1 font-mono text-xs text-ink-faint">+{extra}</li>}
+            </ul>
+          )}
+        </div>
+        <CardScore m={m} />
       </div>
-      <p className="mt-0.5 truncate text-sm text-ink-soft">
-        {m.company_name ?? "Azienda non indicata"} · {place}
-        {m.kind === "thesis" && " · Tesi o dottorato"}
-      </p>
-
-      <div className="mt-3">
-        <CoverageBar m={m} />
-      </div>
-
-      {skills.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Skill che hai">
-          {skills.map((s) => (
-            <li key={s} className="rounded-full bg-good-wash px-2.5 py-1 font-mono text-xs text-good">
-              {s}
-            </li>
-          ))}
-          {extra > 0 && <li className="px-1 py-1 font-mono text-xs text-ink-faint">+{extra}</li>}
-        </ul>
-      )}
 
       <div className="flex items-center justify-between gap-3 pt-3">
         <span className="text-xs text-ink-faint">Priorità {m.priority}</span>
@@ -485,16 +548,18 @@ function MatchDetailSheet({ m, onClose }: { m: FeedMatch | null; onClose: () => 
                     Tesi o dottorato
                   </span>
                 )}
-                {m.below_threshold && (
-                  <span className="rounded-full bg-warn-wash px-2.5 py-1 text-xs font-medium text-warn">
-                    Sotto soglia
-                  </span>
-                )}
+                {m.below_threshold && <BelowTag />}
+                {isLowData(m) && <LowDataTag />}
               </div>
 
               <div className="mt-6">
                 <p className="mb-2 text-xs font-medium text-ink-faint">Copertura delle skill richieste</p>
                 <CoverageBar m={m} size="lg" />
+                {isLowData(m) && (
+                  <p className="mt-2 text-sm text-ink-soft">
+                    Calcolata su {skillsBasis(m)}: con così pochi dati la percentuale è indicativa.
+                  </p>
+                )}
               </div>
 
               <dl className="mt-6 space-y-4">

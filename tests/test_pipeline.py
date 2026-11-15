@@ -145,6 +145,7 @@ def test_run_matching_result_fields(orm, add_user, run):
         "matched_skills": ["docker", "python", "sql"],
         "missing_required": ["kafka"],
         "missing_nice": ["spark"],
+        "skills_measured": 5,
         "first_seen_at": "2026-11-01T10:00:00",
     }
 
@@ -224,14 +225,15 @@ def test_description_used_when_requirements_missing(orm, add_user, run):
 
 def test_profile_without_skills(orm, add_user, run):
     """Senza skill ogni copertura misurata è 0: i ruoli classificati restano
-    tutti marcati below_threshold, quelli di priorità 5 spariscono."""
+    tutti marcati below_threshold, quelli di priorità 5 spariscono. A pari
+    copertura (0%) gli annunci con meno di 3 skill misurate vanno dopo."""
     uid = add_user("vuoto@example.test", [])
     results = run(uid)
 
     assert [(r["title"], r["priority"], r["below_threshold"]) for r in results] == [
-        ("Junior Data Analyst", 1, True),
         ("Junior Data Engineer", 1, True),
         ("Junior Data Scientist", 1, True),
+        ("Junior Data Analyst", 1, True),
         ("Junior BI Analyst", 1, True),
         ("Junior Business Analyst", 1, False),
         ("Junior Backend Developer", 3, True),
@@ -299,3 +301,54 @@ def test_wrong_roles_are_not_in_results(orm, add_user, run):
     titles = {r["title"] for r in run(uid, rows=FEED_ROWS + EXTRA_ROWS)}
     assert "Staff Software Engineer, AI Agents" not in titles
     assert "Account Executive, Leonardo.ai" not in titles
+
+
+# ---------------------------------------------------------------------------
+# Pochi dati: percentuali calcolate su 1-2 skill
+# ---------------------------------------------------------------------------
+
+def test_skills_measured_counts_required_and_nice(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    by_title = {r["title"]: r for r in run(uid)}
+    assert by_title["Junior Data Analyst"]["skills_measured"] == 2
+    # python, sql, docker, kafka richieste + spark gradita
+    assert by_title["Junior Data Engineer"]["skills_measured"] == 5
+    # copertura non misurabile: nessuna skill trovata
+    assert by_title["Junior Business Analyst"]["skills_measured"] == 0
+
+
+def test_few_skills_not_above_many_at_similar_coverage(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    rows = [
+        # 1 di 1 skill: 100%, ma su un solo dato
+        _row("Junior Data Analyst One", "Python"),
+        # 4 skill misurate (3 richieste + 1 gradita), 6/7 = 85,7%
+        _row("Junior Data Analyst Four", "Python, SQL and Docker. Nice to have: Kafka"),
+    ]
+    got = [(r["title"], r["coverage"], r["skills_measured"]) for r in run(uid, rows)]
+    assert got == [
+        ("Junior Data Analyst Four", 0.857, 4),
+        ("Junior Data Analyst One", 1.0, 1),
+    ]
+
+
+def test_few_skills_still_first_when_gap_is_large(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    rows = [
+        # 4 skill misurate, 2/4 = 50% (sotto soglia)
+        _row("Junior Data Analyst Half", "Python, SQL, Kafka, Rust"),
+        # 2 di 2 skill: 100%
+        _row("Junior Data Analyst Two", "Python, SQL"),
+    ]
+    titles = [r["title"] for r in run(uid, rows)]
+    assert titles == ["Junior Data Analyst Two", "Junior Data Analyst Half"]
+
+
+def test_few_skills_does_not_jump_priority(orm, add_user, run):
+    uid = add_user("a@example.test", USER_SKILLS)
+    rows = [
+        _row("Junior Software Engineer", "Python, SQL, Docker, Kafka"),  # priorità 3
+        _row("Junior Data Analyst One", "Python"),                        # priorità 1
+    ]
+    got = [(r["title"], r["priority"]) for r in run(uid, rows)]
+    assert got == [("Junior Data Analyst One", 1), ("Junior Software Engineer", 3)]

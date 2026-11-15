@@ -1,4 +1,5 @@
 import { Loading, PageHeader } from "@/components/Page";
+import { DocumentCheck } from "@/components/illustrations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   useEducation,
@@ -69,6 +70,7 @@ function ProfileHeader({ userId, name }: { userId: string; name: string }) {
     <div className="space-y-4">
       <PageHeader
         title="Profilo"
+        art={<DocumentCheck className="w-full" />}
         lead={
           loading
             ? "Guardo a che punto è il tuo profilo…"

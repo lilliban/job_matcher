@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Building2, Check, Loader2, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 
 import { Hint, PageHeader } from "@/components/Page";
+import { Buildings } from "@/components/illustrations";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -167,9 +168,14 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
         </section>
 
         {/* ------- passo 2 ------- */}
-        <section aria-labelledby="step-sector" className={"space-y-3 " + (scope ? "" : "opacity-50")}>
+        <section aria-labelledby="step-sector" className="space-y-3">
           <StepTitle n={2} id="step-sector" title="In che settore?" />
-          <div className="flex flex-wrap gap-2">
+          {!scope && (
+            <p id="sector-hint" className="max-w-2xl rounded-xl bg-surface px-4 py-2.5 text-sm text-ink">
+              Scegli prima un tipo di azienda.
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2" aria-describedby={scope ? undefined : "sector-hint"}>
             {(catalog.data?.sectors ?? []).map((s) => (
               <button
                 key={s.key}
@@ -177,10 +183,12 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
                 disabled={!scope}
                 onClick={() => setSector(s.key)}
                 className={
-                  "jm-press inline-flex min-h-10 items-center rounded-full border px-4 py-2 text-sm disabled:cursor-not-allowed " +
+                  "jm-press inline-flex min-h-10 items-center rounded-full border px-4 py-2 text-sm " +
+                  // Disabilitati ma leggibili: testo ink-soft su superficie (contrasto > 4.5:1)
+                  "disabled:cursor-not-allowed disabled:border-dashed disabled:border-line-hard disabled:bg-surface disabled:text-ink-soft " +
                   (sector === s.key
-                    ? "border-accent bg-accent text-paper"
-                    : "border-line bg-paper-2 hover:border-accent hover:text-accent")
+                    ? "border-accent bg-accent text-paper-2"
+                    : "border-line-hard bg-paper-2 hover:border-accent hover:text-accent")
                 }
               >
                 {s.label}
@@ -203,7 +211,8 @@ function CompaniesWorkspace({ userId }: { userId: string }) {
           {browse.isPending && results.length === 0 ? (
             <SkeletonGrid />
           ) : results.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-line-hard bg-paper-2 p-8 text-center text-sm text-ink-faint">
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line-hard bg-paper-2 px-6 py-6 text-center text-sm text-ink-soft">
+              <Buildings className="w-24 sm:w-28" />
               {scope && sector
                 ? "Nessun risultato."
                 : "Scegli un tipo e un settore e qui compariranno le aziende."}
@@ -366,9 +375,12 @@ function MyList({
       {loading ? (
         <p className="text-sm text-ink-faint">Carico…</p>
       ) : companies.length === 0 ? (
-        <p className="text-sm text-ink-soft">
-          Ancora vuota. Aggiungi le aziende che ti interessano: le userai nelle ricerche.
-        </p>
+        <div className="flex flex-col items-start gap-3">
+          <Buildings className="w-24" />
+          <p className="text-sm text-ink-soft">
+            Ancora vuota. Aggiungi le aziende che ti interessano: le userai nelle ricerche.
+          </p>
+        </div>
       ) : (
         <ul className="max-h-[320px] space-y-1 overflow-y-auto pr-1">
           {companies.map((c) => (

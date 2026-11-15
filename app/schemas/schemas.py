@@ -359,6 +359,11 @@ class FeedMatchOut(BaseModel):
     matched_skills: list[str] = []
     missing_required: list[str] = []
     missing_nice: list[str] = []
+    skills_measured: int = Field(
+        default=0,
+        description="Skill dell'annuncio su cui è calcolata la copertura (richieste + gradite); "
+        "sotto 3 la percentuale è poco affidabile",
+    )
     first_seen_at: Optional[str] = None
 
 

@@ -30,11 +30,25 @@
   --color-bad: #8f2a2a;
   --color-bad-wash: #f8ebeb;
 
+  /*
+   * Illustrazioni piatte (src/components/illustrations/): tre teal, carta,
+   * bianco e un solo accento caldo, il prugna. Nessun arancione.
+   */
+  --color-teal-deep: #06525c;
+  --color-teal-mid: #2f737d;
+  --color-teal-soft: #a9cbc6;
+  --color-plum: #a0708f;
+
   --font-sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
   --radius-sm: 8px;
   --radius: 12px;
+}
+
+:root {
+  /* Nome esplicito dell'accento caldo, per chi lo cerca fuori da Tailwind */
+  --accent-plum: var(--color-plum);
 }
 
 body {

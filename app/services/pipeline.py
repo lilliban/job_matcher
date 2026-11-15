@@ -22,6 +22,21 @@ from app.services.feed_reader import download_feed, load_postings, prefilter
 
 UNCLASSIFIED_PRIORITY = 5
 
+# Una percentuale calcolata su una o due skill dice poco: "1 di 1" fa 100%
+# ma non vale un 90% su dieci skill. Sotto LOW_DATA_SKILLS skill misurate
+# l'annuncio si ordina come se la copertura fosse più bassa di
+# LOW_DATA_PENALTY: a percentuale simile passa dietro chi ha più dati, ma
+# resta davanti se la differenza è netta. La percentuale mostrata non cambia.
+LOW_DATA_SKILLS = 3
+LOW_DATA_PENALTY = 0.2
+
+
+def _sort_coverage(r: dict) -> float:
+    cov = r["coverage"] or 0.0
+    if r["skills_measured"] < LOW_DATA_SKILLS:
+        cov -= LOW_DATA_PENALTY
+    return cov
+
 
 def load_user_skill_names(db: Session, user_id: str) -> list[str]:
     """Nomi delle hard skill del profilo, letti dalla relazione User.hard_skills
@@ -75,6 +90,9 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
             "matched_skills": cov["matched"],
             "missing_required": cov["missing_required"],
             "missing_nice": cov["missing_nice"],
+            # skill dell'annuncio su cui è calcolata la copertura (richieste
+            # + gradite): sotto LOW_DATA_SKILLS la percentuale è poco affidabile
+            "skills_measured": len(cov["matched"]) + len(cov["missing_required"]) + len(cov["missing_nice"]),
             "first_seen_at": p.get("first_seen_at"),
         })
 
@@ -82,11 +100,12 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
     # (sopra soglia, poi sotto soglia, in ordine decrescente) e in coda gli
     # annunci con copertura None: senza skill riconosciute nel testo non
     # sappiamo dire nulla, quindi non passano davanti a chi è misurato.
+    # A parità di gruppo pesa la copertura corretta per i pochi dati.
     results.sort(key=lambda r: (
         r["priority"],
         r["coverage"] is None,
         r["below_threshold"],
-        -(r["coverage"] or 0.0),
+        -_sort_coverage(r),
     ))
     return results
 
