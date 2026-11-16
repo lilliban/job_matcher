@@ -1,17 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Building2, History, Search, Sparkles, UserRound } from "lucide-react";
+import { Building2, FolderOpen, Search, Sparkles, UserRound } from "lucide-react";
 
+import { useNewMatchCount } from "@/api/queries";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 
 export const NAV_ITEMS = [
   { to: "/match", label: "I tuoi match", icon: Sparkles },
+  { to: "/candidature", label: "Candidature", icon: FolderOpen },
   { to: "/ricerche", label: "Ricerche", icon: Search },
   { to: "/aziende", label: "Aziende", icon: Building2 },
   { to: "/profilo", label: "Profilo", icon: UserRound },
-  { to: "/storico", label: "Storico", icon: History },
 ] as const;
+
+/** Quanti annunci nuovi da ieri: il numero accanto a «I tuoi match». Niente se sono zero. */
+function NewBadge({ count, active }: { count: number | undefined; active: boolean }) {
+  if (!count) return null;
+  return (
+    <>
+      <span
+        aria-hidden
+        className={cn(
+          "ml-auto grid h-5 min-w-5 place-items-center rounded-full px-1.5 font-mono text-xs leading-none tabular-nums",
+          active ? "bg-paper-2 text-accent" : "bg-accent text-paper-2",
+        )}
+      >
+        {count > 99 ? "99+" : count}
+      </span>
+      <span className="sr-only">, {count} nuovi da ieri</span>
+    </>
+  );
+}
 
 /** Marchio: monogramma JM su teal, stesso alfabeto della pagina. */
 function Logo() {
@@ -29,7 +49,8 @@ function Logo() {
 }
 
 export function AppLayout() {
-  const { user } = useCurrentUser();
+  const { user, userId } = useCurrentUser();
+  const newCount = useNewMatchCount(userId);
   const { pathname } = useLocation();
   const mobileNav = useRef<HTMLElement>(null);
   // Sfumatura a destra finché il menu ha ancora voci nascoste da quel lato.
@@ -84,6 +105,7 @@ export function AppLayout() {
             >
               <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
               {label}
+              {to === "/match" && <NewBadge count={newCount} active={pathname.startsWith("/match")} />}
             </NavLink>
           ))}
         </nav>
@@ -118,6 +140,11 @@ export function AppLayout() {
               }
             >
               {label}
+              {to === "/match" && (
+                <span className="ml-2 inline-flex">
+                  <NewBadge count={newCount} active={pathname.startsWith("/match")} />
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

@@ -72,6 +72,16 @@ body {
   outline-offset: 2px;
 }
 
+/*
+ * Titolo-pulsante che copre tutta la card (feed, Candidature, ricerche): il segno
+ * di focus è l'anello sulla card intera, non il contorno attorno alle sole parole.
+ * Fuori da @layer perché la regola di focus qui sopra lo è: le utility di
+ * Tailwind (focus-visible:outline-none) non la scavalcano.
+ */
+.jm-stretch:focus-visible {
+  outline: none;
+}
+
 /* Niente parole orfane in fondo ai paragrafi (Chrome e Safari; altrove si ignora) */
 @layer base {
   p {
@@ -110,7 +120,31 @@ body {
   animation: jm-bar-in 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/*
+ * Pannello di dettaglio (Radix lo tiene montato finché l'animazione di uscita
+ * non finisce). Entra e esce dallo stesso lato: dal basso su telefono, da destra
+ * dal tablet in su. Curva esponenziale in uscita dal punto di partenza, 220ms.
+ */
+@keyframes jm-sheet-in-y { from { opacity: 0; transform: translateY(24px); } }
+@keyframes jm-sheet-out-y { to { opacity: 0; transform: translateY(24px); } }
+@keyframes jm-sheet-in-x { from { opacity: 0; transform: translateX(32px); } }
+@keyframes jm-sheet-out-x { to { opacity: 0; transform: translateX(32px); } }
+@keyframes jm-fade-in { from { opacity: 0; } }
+@keyframes jm-fade-out { to { opacity: 0; } }
+
+.jm-sheet[data-state="open"] { animation: jm-sheet-in-y 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.jm-sheet[data-state="closed"] { animation: jm-sheet-out-y 160ms cubic-bezier(0.7, 0, 0.84, 0) both; }
+.jm-overlay[data-state="open"] { animation: jm-fade-in 200ms ease-out both; }
+.jm-overlay[data-state="closed"] { animation: jm-fade-out 160ms ease-in both; }
+@media (min-width: 640px) {
+  .jm-sheet[data-state="open"] { animation-name: jm-sheet-in-x; }
+  .jm-sheet[data-state="closed"] { animation-name: jm-sheet-out-x; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .jm-press, .jm-press:active { transition: none; transform: none; }
   .jm-bar-fill { animation: none; }
+  /* solo dissolvenza: niente scorrimento */
+  .jm-sheet[data-state="open"] { animation: jm-fade-in 150ms ease-out both; }
+  .jm-sheet[data-state="closed"] { animation: jm-fade-out 120ms ease-in both; }
 }

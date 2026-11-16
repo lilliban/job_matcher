@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyBox } from "@/components/illustrations";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   useCancelSession,
   useSession,
@@ -13,34 +12,12 @@ import {
   useSessionMatches,
   useSessionStatus,
   useStartSession,
-  useUpdateMatchStatus,
+  type SavedMatch,
 } from "@/api/queries";
-import { MatchDocuments } from "./MatchDocuments";
+import { MatchDetailSheet } from "@/components/match/MatchDetailSheet";
+import { LowDataTag, StatusTag } from "@/components/match/parts";
+import { coveragePct, fromMatch, isLowData, regionLabel, skillsBasis } from "@/components/match/matchModel";
 import { ReportPanel } from "../report/ReportBody";
-import type { MatchDetailOut } from "@/api/schemas";
-
-/**
- * Le skill di un match arrivano come testo: a volte un array JSON
- * (`["Python", "SQL"]`), a volte un elenco separato da virgole.
- */
-function splitSkills(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  const text = raw.trim();
-  if (text.startsWith("[")) {
-    try {
-      const parsed: unknown = JSON.parse(text);
-      if (Array.isArray(parsed)) {
-        return parsed.map((s) => String(s).trim()).filter(Boolean);
-      }
-    } catch {
-      // JSON non valido: si prova con le virgole
-    }
-  }
-  return text
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 const RUN_STATE_LABEL: Record<string, string> = {
   draft: "Pronta",
@@ -54,17 +31,6 @@ const MODE_LABEL: Record<string, string> = {
   companies: "Nelle mie aziende",
   market: "Su tutte le aziende",
   both: "Aziende e mercato",
-};
-
-const MATCH_STATUS_LABEL: Record<string, string> = {
-  new: "Nuovo",
-  saved: "Salvato",
-  applied: "Inviato",
-  waiting: "In attesa",
-  interview: "Colloquio",
-  accepted: "Accettato",
-  rejected: "Rifiutato",
-  discarded: "Scartato",
 };
 
 const STATUS_FILTERS = [
@@ -92,7 +58,6 @@ export function SessionWorkspace({
   const matches = useSessionMatches(userId, sessionId);
   const startSession = useStartSession(userId);
   const cancelSession = useCancelSession(userId);
-  const updateStatus = useUpdateMatchStatus();
 
   const [tab, setTab] = useState<"matches" | "analysis">("matches");
   const [filter, setFilter] = useState<string>("");
@@ -108,10 +73,19 @@ export function SessionWorkspace({
     return all.filter((m) => m.status === filter);
   }, [matches.data, filter]);
 
-  const selectedMatch: MatchDetailOut | null = useMemo(() => {
+  // Il dettaglio si ricalcola dai dati più recenti: cambiando stato l'etichetta si aggiorna da sola
+  const selectedMatch = useMemo(() => {
     if (!selectedMatchId) return null;
     return matches.data?.find((m) => m.id === selectedMatchId) ?? null;
   }, [selectedMatchId, matches.data]);
+
+  // I match sono già in ordine: prima i legati al profilo, poi «Poco legati al tuo profilo»
+  const { related, unrelated } = useMemo(() => {
+    return {
+      related: filteredMatches.filter((m) => !m.off_profile),
+      unrelated: filteredMatches.filter((m) => m.off_profile),
+    };
+  }, [filteredMatches]);
 
   async function handleRun() {
     try {
@@ -154,7 +128,7 @@ export function SessionWorkspace({
               {s.preferred_country && <span>{s.preferred_country}</span>}
               {s.location_pref && <span>· {s.location_pref}</span>}
               {s.contract_type && <span>· {s.contract_type}</span>}
-              <span>· soglia {Math.round((s.match_threshold ?? 0) * 100)}%</span>
+              <span>· pertinenza minima {Math.round((s.match_threshold ?? 0) * 100)}%</span>
               <span className={runStatus === "error" ? "text-bad" : undefined}>
                 · {RUN_STATE_LABEL[runStatus] ?? runStatus}
               </span>
@@ -254,7 +228,6 @@ export function SessionWorkspace({
             <h2 className="jm-h2">Annunci raccolti</h2>
             <p className="text-sm text-ink-soft">
               {listings.data?.length ?? 0} annunci · {matches.data?.length ?? 0} match
-              sopra soglia
             </p>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -263,6 +236,7 @@ export function SessionWorkspace({
                 key={f.key}
                 type="button"
                 onClick={() => setFilter(f.key)}
+                aria-pressed={filter === f.key}
                 className={
                   "jm-press inline-flex h-10 items-center rounded-full px-4 text-sm " +
                   (filter === f.key
@@ -282,168 +256,90 @@ export function SessionWorkspace({
             Nessun annuncio sopra soglia, per ora. Se la ricerca è finita guarda «Com'è andata» per capire perché.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-            <ul className="space-y-2">
-              {filteredMatches.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMatchId(m.id)}
-                    className={
-                      "jm-press w-full rounded-xl border p-3 text-left text-sm " +
-                      (selectedMatchId === m.id
-                        ? "border-accent bg-accent-wash"
-                        : "border-line bg-paper-2 hover:border-line-hard")
-                    }
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-medium">
-                        {m.listing?.title ?? "—"}
-                      </span>
-                      <span className="font-mono text-xs text-accent">
-                        {Math.round((m.score ?? 0) * 100)}%
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-xs text-ink-faint">
-                      <span className="truncate">{m.listing?.company_name}</span>
-                      <Badge variant="outline" className="ml-2 shrink-0">
-                        {MATCH_STATUS_LABEL[m.status ?? ""] ?? m.status}
-                      </Badge>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            <div className="min-h-64">
-              {selectedMatch ? (
-                <MatchDetail
-                  match={selectedMatch}
-                  onStatusChange={(status) => {
-                    updateStatus.mutate(
-                      { matchId: selectedMatch.id, body: { status } },
-                      { onSuccess: () => toast.success("Stato aggiornato") },
-                    );
-                  }}
-                />
-              ) : (
-                <div className="rounded-2xl border border-dashed border-line p-8 text-sm text-ink-faint">
-                  Seleziona un annuncio a sinistra per vedere dettagli e documenti.
-                </div>
-              )}
-            </div>
-          </div>
+          <>
+            <p className="mb-3 text-sm text-ink-soft">
+              La percentuale è la copertura delle tue skill, la stessa di «I tuoi match». Il punteggio della
+              ricerca, la «Pertinenza», lo trovi nel dettaglio di ogni annuncio.
+            </p>
+            <MatchList matches={related} onOpen={setSelectedMatchId} />
+            {unrelated.length > 0 && (
+              <section aria-labelledby="poco-legati" className={related.length > 0 ? "mt-8" : undefined}>
+                <h3 id="poco-legati" className="text-base font-medium">
+                  Poco legati al tuo profilo{" "}
+                  <span className="font-mono text-sm font-normal text-ink-faint">{unrelated.length}</span>
+                </h3>
+                <p className="mb-3 mt-1 text-sm text-ink-soft">
+                  Il ruolo non è tra quelli del tuo profilo, o nessuna delle tue skill compare nell'annuncio. Li
+                  tengo qui, in fondo, nel caso ti interessino.
+                </p>
+                <MatchList matches={unrelated} onOpen={setSelectedMatchId} />
+              </section>
+            )}
+          </>
         )}
       </Card>
       )}
+
+      <MatchDetailSheet
+        view={selectedMatch ? fromMatch(selectedMatch) : null}
+        onClose={() => setSelectedMatchId(null)}
+      />
     </div>
   );
 }
 
-const STATUSES = ["new", "saved", "applied", "waiting", "interview", "accepted", "rejected", "discarded"] as const;
-
-function MatchDetail({
-  match,
-  onStatusChange,
-}: {
-  match: MatchDetailOut;
-  onStatusChange: (status: string) => void;
-}) {
-  const listing = match.listing;
+/** Una riga per annuncio: titolo che apre il dettaglio, copertura, stato. */
+function MatchList({ matches, onOpen }: { matches: SavedMatch[]; onOpen: (id: string) => void }) {
+  if (matches.length === 0) return null;
   return (
-    <Card className="space-y-4 p-6">
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-ink-faint">
-            {listing?.source_board ?? "—"}
-          </p>
-          <h3 className="jm-h2">{listing?.title ?? "—"}</h3>
-          <p className="text-sm text-ink-soft">{listing?.company_name}</p>
-        </div>
-        <div className="text-right">
-          <div className="font-mono text-3xl tracking-[-0.02em] text-accent">
-            {Math.round((match.score ?? 0) * 100)}%
-          </div>
-          <select
-            value={match.status}
-            onChange={(e) => onStatusChange(e.target.value)}
-            aria-label="Stato della candidatura"
-            className="mt-2 h-10 rounded-full border border-field bg-paper-2 px-3 text-sm"
+    <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-paper-2">
+      {matches.map((m) => {
+        const view = fromMatch(m);
+        const pct = coveragePct(view);
+        return (
+          <li
+            key={m.id}
+            className="group relative flex items-start justify-between gap-4 p-4 transition-colors hover:bg-paper"
           >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {MATCH_STATUS_LABEL[s] ?? s}
-              </option>
-            ))}
-          </select>
-        </div>
-      </header>
-
-      {listing?.source_url && (
-        <a
-          href={listing.source_url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-sm text-accent underline-offset-4 hover:underline"
-        >
-          Vai all'annuncio originale ↗
-        </a>
-      )}
-
-      {(() => {
-        const matched = splitSkills(match.matched_skills);
-        return matched.length > 0 ? (
-          <div>
-            <p className="mb-2 text-xs font-medium text-ink-faint">
-              Hai
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {matched.map((s) => (
-                <Badge key={s} variant="good">
-                  + {s}
-                </Badge>
-              ))}
+            <div className="min-w-0">
+              <h4 className="text-[15px] font-medium leading-snug [overflow-wrap:anywhere]">
+                <button
+                  type="button"
+                  onClick={() => onOpen(m.id)}
+                  className="jm-stretch text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-accent"
+                >
+                  {view.title}
+                </button>
+              </h4>
+              <p className="mt-0.5 text-sm text-ink-soft [overflow-wrap:anywhere]">
+                {[view.company, view.region !== "unknown" ? regionLabel(view.region) : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+              {m.status !== "new" && (
+                <div className="mt-2">
+                  <StatusTag status={m.status} />
+                </div>
+              )}
             </div>
-          </div>
-        ) : null;
-      })()}
-
-      {(() => {
-        const missing = splitSkills(match.missing_skills);
-        return missing.length > 0 ? (
-          <div>
-            <p className="mb-2 text-xs font-medium text-ink-faint">
-              Ti mancano
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {missing.map((s) => (
-                <Badge key={s} variant="warn">
-                  − {s}
-                </Badge>
-              ))}
+            <div className="shrink-0 text-right">
+              {pct == null ? (
+                <p className="max-w-24 text-xs leading-snug text-ink-soft">Skill non trovate nell'annuncio</p>
+              ) : (
+                <>
+                  <p className="font-mono text-lg leading-none tabular-nums">{pct}%</p>
+                  <p className="mt-1 font-mono text-xs text-ink-soft">{skillsBasis(view)}</p>
+                  {isLowData(view) && (
+                    <div className="mt-1">
+                      <LowDataTag />
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          </div>
-        ) : null;
-      })()}
-
-      {match.gap_analysis && (
-        <div className="rounded-xl border border-line bg-paper p-3 text-sm text-ink-soft">
-          {match.gap_analysis}
-        </div>
-      )}
-
-      {listing?.description && (
-        <details>
-          <summary className="flex min-h-10 cursor-pointer items-center text-sm text-ink-soft">
-            Descrizione annuncio
-          </summary>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-ink-soft">
-            {listing.description}
-          </p>
-        </details>
-      )}
-
-      <MatchDocuments matchId={match.id} />
-    </Card>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

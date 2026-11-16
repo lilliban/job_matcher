@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Download, FileText, Loader2, X } from "lucide-react";
 
@@ -7,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useGenerateApplication, type ApplicationResult } from "@/api/queries";
+import { useGenerateApplication, useMatch, type ApplicationResult } from "@/api/queries";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const DOC_LABEL: Record<string, string> = {
@@ -48,13 +49,18 @@ async function downloadExport(content: string, fmt: string, name: string) {
   URL.revokeObjectURL(url);
 }
 
-/** Pannello "da un link": vive dentro la pagina Ricerche, non ha una sezione sua. */
-export function ApplyPanel() {
+/**
+ * Pannello "da un link": una scheda di Ricerche. Se arriva da «Prepara CV e
+ * lettera» di un annuncio, il link è già compilato e i documenti generati
+ * vengono salvati sulla candidatura (`matchId`).
+ */
+export function ApplyPanel({ initialUrl = "", matchId }: { initialUrl?: string; matchId?: string }) {
   const { userId, isBooting } = useCurrentUser();
   const generate = useGenerateApplication();
+  const linked = useMatch(matchId ?? null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(initialUrl);
   const [jobText, setJobText] = useState("");
   const [showPaste, setShowPaste] = useState(false);
   const [guidelines, setGuidelines] = useState("");
@@ -83,6 +89,7 @@ export function ApplyPanel() {
     if (!userId) return;
     const fd = new FormData();
     fd.append("user_id", userId);
+    if (matchId) fd.append("match_id", matchId);
     if (url.trim()) fd.append("url", url.trim());
     if (jobText.trim()) fd.append("job_text", jobText.trim());
     if (guidelines.trim()) fd.append("guidelines", guidelines.trim());
@@ -112,6 +119,20 @@ export function ApplyPanel() {
         <Card className="p-8 text-ink-soft">Crea prima il tuo profilo.</Card>
       ) : (
         <Card className="space-y-6 p-6">
+          {matchId && (
+            <p className="rounded-xl bg-surface px-4 py-3 text-sm text-ink-soft">
+              {linked.data?.listing ? (
+                <>
+                  Stai preparando i documenti per{" "}
+                  <span className="font-medium text-ink">{linked.data.listing.title}</span>
+                  {linked.data.listing.company_name ? `, ${linked.data.listing.company_name}` : ""}. Li salvo nella
+                  candidatura.
+                </>
+              ) : (
+                "Stai preparando i documenti per un annuncio salvato. Li salvo nella candidatura."
+              )}
+            </p>
+          )}
           <div className="space-y-2">
             <Label htmlFor="apply-url">Link dell'annuncio</Label>
             <Input
@@ -212,6 +233,15 @@ export function ApplyPanel() {
       )}
 
       {result && <ResultPanel key={runId} result={result} />}
+      {result?.match_id && (
+        <p className="mt-6 text-sm text-ink-soft">
+          CV e lettera sono salvati nella candidatura.{" "}
+          <Link to="/candidature" className="font-medium text-ink underline underline-offset-4">
+            Vai a Candidature
+          </Link>
+          .
+        </p>
+      )}
     </div>
   );
 }

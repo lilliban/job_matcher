@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EyeOff } from "lucide-react";
 
-import { EmptyState, Loading, PageHeader } from "@/components/Page";
+import { EmptyState, Loading } from "@/components/Page";
 import { Clock } from "@/components/illustrations";
 import { useDeleteSession, useSessionsOverview, type SessionOverview } from "@/api/queries";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -54,8 +53,11 @@ function isQuiet(s: SessionOverview): boolean {
   return s.status === "draft" || (s.listings_count === 0 && s.status !== "running");
 }
 
-/** Storico: l'elenco delle ricerche già fatte. Le nuove si lanciano da Ricerche. */
-export function ReportView() {
+/**
+ * Ricerche fatte: l'elenco delle ricerche già fatte e, per quella aperta, i suoi
+ * annunci. Vive come scheda dentro Ricerche (prima era la pagina Storico).
+ */
+export function SearchHistory() {
   const { userId, isBooting } = useCurrentUser();
   const sessionId = useAppState((s) => s.sessionId);
   const setSessionId = useAppState((s) => s.setSessionId);
@@ -67,6 +69,7 @@ export function ReportView() {
 
   const [showQuiet, setShowQuiet] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
+  const workspace = useRef<HTMLElement>(null);
 
   const sessions = useMemo(() => overview.data ?? [], [overview.data]);
   const hidden = useMemo(() => new Set(hiddenIds), [hiddenIds]);
@@ -107,47 +110,22 @@ export function ReportView() {
     });
   }
 
-  const header = (
-    <PageHeader
-      title="Storico"
-      lead={
-        <>
-          Le ricerche che hai già fatto. Per lanciarne una nuova vai in{" "}
-          <Link to="/ricerche" className="font-medium text-ink underline underline-offset-4">
-            Ricerche
-          </Link>
-          .
-        </>
-      }
-    />
-  );
-
   if (isBooting || overview.isLoading) {
-    return (
-      <div className="mx-auto max-w-6xl space-y-6">
-        {header}
-        <Loading />
-      </div>
-    );
+    return <Loading />;
   }
 
   if (!userId || sessions.length === 0) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6">
-        {header}
-        <EmptyState art={<Clock className="w-full" />}>
-          {!userId
-            ? "Crea prima il tuo profilo: poi qui trovi tutte le tue ricerche."
-            : "Non hai ancora fatto nessuna ricerca. Quando ne avvii una, la trovi qui."}
-        </EmptyState>
-      </div>
+      <EmptyState art={<Clock className="w-full" />}>
+        {!userId
+          ? "Crea prima il tuo profilo: poi qui trovi tutte le tue ricerche."
+          : "Non hai ancora fatto nessuna ricerca. Quando ne avvii una, la trovi qui."}
+      </EmptyState>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      {header}
-
+    <div className="space-y-6">
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[340px_minmax(0,1fr)]">
         <aside aria-label="Le tue ricerche" className="space-y-3 lg:sticky lg:top-8 lg:self-start">
           <div className="flex flex-wrap gap-2">
@@ -178,7 +156,15 @@ export function ReportView() {
                     g={g}
                     active={!!openId && g.ids.includes(openId)}
                     hidden={isHidden(g)}
-                    onOpen={() => setSessionId(g.latest.id)}
+                    onOpen={() => {
+                      setSessionId(g.latest.id);
+                      // Su telefono i risultati stanno sotto l'elenco: portali in vista
+                      if (window.matchMedia("(max-width: 1023px)").matches) {
+                        requestAnimationFrame(() =>
+                          workspace.current?.scrollIntoView({ block: "start", behavior: "smooth" }),
+                        );
+                      }
+                    }}
                     onHide={() => handleHide(g)}
                     onUnhide={() => unhideSessions(g.ids)}
                   />
@@ -188,7 +174,7 @@ export function ReportView() {
           )}
         </aside>
 
-        <section aria-label="Dettaglio ricerca" className="min-w-0">
+        <section ref={workspace} aria-label="Dettaglio ricerca" className="min-w-0 scroll-mt-20">
           {openId && (
             <SessionWorkspace
               key={openId}

@@ -65,6 +65,8 @@ def test_feed_returns_matches_for_user(orm, api, add_user, make_feed):
             "missing_nice": [],
             "skills_measured": 2,
             "first_seen_at": "2026-11-02T10:00:00",
+            "description": "Python, SQL",
+            "is_new": False,
         },
         {
             "title": "Junior Data Scientist",
@@ -82,6 +84,8 @@ def test_feed_returns_matches_for_user(orm, api, add_user, make_feed):
             "missing_nice": [],
             "skills_measured": 3,
             "first_seen_at": "2026-11-01T10:00:00",
+            "description": "Rust, Scala, Kafka",
+            "is_new": False,
         },
     ]
 

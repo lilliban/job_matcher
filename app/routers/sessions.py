@@ -10,15 +10,18 @@ import logging
 from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.security import verify_token
 from app import models, schemas
 from app.database import get_db
+from app.routers.matches import user_skill_names, with_insight
 from app.routers.users import get_user_or_404
 from app.services.llm_gateway import LLMGateway
 from app.services.matcher import MatchingEngine
 from app.services.search_runner import register_task, request_cancel, run_search
+from app.services.tracking import FEED_MODE, match_sort_key, scores_are_uniform
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,14 @@ def get_session_or_404(db: Session, user_id: str, session_id: str) -> models.Sea
     if not session or session.user_id != user_id:
         raise HTTPException(404, "Sessione non trovata")
     return session
+
+
+def real_searches(query):
+    """Esclude la ricerca riservata che raccoglie gli annunci salvati dal feed:
+    non è una ricerca fatta dall'utente e non va in "Ricerche fatte"."""
+    return query.filter(
+        or_(models.SearchSession.search_mode.is_(None), models.SearchSession.search_mode != FEED_MODE)
+    )
 
 
 # ---------------------------------------------------------------------
@@ -97,7 +108,7 @@ def create_session(
 def list_sessions(user_id: str, db: Session = Depends(get_db)):
     get_user_or_404(db, user_id)
     return (
-        db.query(models.SearchSession)
+        real_searches(db.query(models.SearchSession))
         .filter(models.SearchSession.user_id == user_id)
         .order_by(models.SearchSession.created_at.desc())
         .all()
@@ -113,7 +124,7 @@ def sessions_overview(user_id: str, db: Session = Depends(get_db)):
 
     get_user_or_404(db, user_id)
     sessions = (
-        db.query(models.SearchSession)
+        real_searches(db.query(models.SearchSession))
         .filter(models.SearchSession.user_id == user_id)
         .order_by(models.SearchSession.created_at.desc())
         .all()
@@ -245,6 +256,9 @@ async def start_search(
     """Avvia la ricerca e risponde SUBITO. Il client fa polling su /status."""
     session = get_session_or_404(db, user_id, session_id)
 
+    if session.search_mode == FEED_MODE:
+        raise HTTPException(400, "Questa non è una ricerca: raccoglie gli annunci salvati dal feed")
+
     if session.status == "running":
         raise HTTPException(409, "Una ricerca è già in corso per questa sessione")
 
@@ -340,11 +354,21 @@ def list_matches(
     status: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    get_session_or_404(db, user_id, session_id)
+    session = get_session_or_404(db, user_id, session_id)
     q = db.query(models.Match).filter(models.Match.session_id == session_id)
     if status:
         q = q.filter(models.Match.status == status)
-    return q.order_by(models.Match.score.desc()).all()
+    matches = q.all()
+
+    # Una sola metrica: la copertura "N di M skill" del feed. Il punteggio della
+    # ricerca resta come "Pertinenza"; se è uguale per tutti non distingue nulla.
+    skills = user_skill_names(session.user)
+    uniform = scores_are_uniform([m.score for m in session.matches])
+    rows = [with_insight(m, skills, uniform, schemas.MatchDetailOut) for m in matches]
+    # prima i legati al profilo, poi «Poco legati al tuo profilo»; dentro ogni
+    # gruppo la copertura più alta per prima, quella non misurabile in coda
+    rows.sort(key=lambda r: match_sort_key({"coverage": r.coverage, "off_profile": r.off_profile}))
+    return rows
 
 
 # ---------------------------------------------------------------------

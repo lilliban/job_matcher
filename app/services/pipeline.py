@@ -12,6 +12,7 @@ Flusso tipico:
     db = SessionLocal()
     results = run_matching(user_id, db, "feeds_cache")
 """
+from datetime import date
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.models import User
 from app.services.coverage import compute_coverage, passes_threshold
 from app.services.feed_reader import download_feed, load_postings, prefilter
+from app.services.tracking import qualifies_as_new
 
 UNCLASSIFIED_PRIORITY = 5
 
@@ -45,7 +47,9 @@ def load_user_skill_names(db: Session, user_id: str) -> list[str]:
     return [s.name for s in user.hard_skills if s.name]
 
 
-def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
+def match_postings(
+    postings: list[dict], user_skills: list[str], today: date | None = None
+) -> list[dict]:
     """Prefiltro + copertura + ordinamento su annunci già caricati.
 
     La selezione favorisce il recall: meglio un annuncio in più che un
@@ -57,7 +61,11 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
       almeno un segnale dalle skill.
     - Tesi e dottorati restano nel risultato con kind="thesis": è la pagina
       a tenerli fuori dalla lista principale.
+    - `is_new`: visto per la prima volta da ieri alle 00:00 (rispetto a
+      `today`, di default oggi) e con copertura almeno alla soglia, oppure
+      non misurabile ma di priorità 1.
     """
+    today = today or date.today()
     kept, _discarded = prefilter(postings)
 
     results: list[dict] = []
@@ -92,6 +100,10 @@ def match_postings(postings: list[dict], user_skills: list[str]) -> list[dict]:
             # + gradite): sotto LOW_DATA_SKILLS la percentuale è poco affidabile
             "skills_measured": len(cov["matched"]) + len(cov["missing_required"]) + len(cov["missing_nice"]),
             "first_seen_at": p.get("first_seen_at"),
+            # il testo su cui è calcolata la copertura: serve al dettaglio e,
+            # se l'annuncio viene salvato, a ricalcolare la stessa percentuale
+            "description": text or None,
+            "is_new": qualifies_as_new(p.get("first_seen_at"), pct, priority, today),
         })
 
     # Priorità crescente. Dentro la priorità:

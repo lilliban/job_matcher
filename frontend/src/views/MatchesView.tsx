@@ -1,22 +1,25 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import * as Dialog from "@radix-ui/react-dialog";
-import { ArrowUpRight, RotateCw, X } from "lucide-react";
+import { ChevronRight, RotateCw } from "lucide-react";
 
 import { ApiError } from "@/api/client";
-import { useFeedMatches, type FeedMatch } from "@/api/queries";
+import { useFeedMatches, useTrackedMatches, type FeedMatch, type TrackedMatch } from "@/api/queries";
 import { EmptyState, Hint, Loading, PageHeader } from "@/components/Page";
 import { DocumentsLens } from "@/components/illustrations";
+import { MatchDetailSheet } from "@/components/match/MatchDetailSheet";
+import { CardScore, StatusTag } from "@/components/match/parts";
+import {
+  CATEGORY_LABEL,
+  REGION_REMOTE_EU,
+  REGION_UNKNOWN,
+  THRESHOLD_PCT,
+  fromFeed,
+  isTracked,
+  regionLabel,
+  type MatchView,
+} from "@/components/match/matchModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
-
-const CATEGORY_LABEL: Record<string, string> = {
-  analytics_ai: "Dati e AI",
-  consulting_security: "Consulenza e sicurezza",
-  software: "Sviluppo software",
-  support_qa: "Supporto e QA",
-  unclassified: "Altri ruoli",
-};
 
 type SortMode = "default" | "coverage_desc" | "coverage_asc";
 
@@ -26,48 +29,14 @@ const SORT_LABEL: Record<SortMode, string> = {
   coverage_asc: "Copertura: dalla più bassa",
 };
 
-// Valori di FeedMatch.region che non sono un codice paese
-const REGION_REMOTE_EU = "remote_eu";
-const REGION_UNKNOWN = "unknown";
-const NO_COUNTRY_LABEL = "Paese non indicato";
 const PAGE_SIZE = 30;
-/** Soglia di copertura del feed: COVERAGE_THRESHOLD in app/services/coverage.py */
-const THRESHOLD_PCT = 60;
-const BELOW_LABEL = `Sotto il ${THRESHOLD_PCT}%`;
 const CARD_SKILLS = 4;
-
-const regionNames =
-  typeof Intl !== "undefined" && "DisplayNames" in Intl
-    ? new Intl.DisplayNames(["it"], { type: "region" })
-    : null;
-
-function countryName(code: string): string {
-  try {
-    return regionNames?.of(code.toUpperCase()) ?? code;
-  } catch {
-    return code;
-  }
-}
-
-/** Etichetta del luogo: paese, "Remoto in Europa" o "Paese non indicato". */
-function regionLabel(region: string): string {
-  if (region === REGION_UNKNOWN) return NO_COUNTRY_LABEL;
-  if (region === REGION_REMOTE_EU) return "Remoto in Europa";
-  return countryName(region);
-}
 
 /** Nel menu: prima i paesi in ordine alfabetico, poi remoto, poi non indicato. */
 function regionRank(region: string): number {
   if (region === REGION_UNKNOWN) return 2;
   if (region === REGION_REMOTE_EU) return 1;
   return 0;
-}
-
-function seenLabel(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
 }
 
 /** Ordina per copertura; gli annunci senza copertura misurata restano in fondo. */
@@ -78,14 +47,12 @@ function byCoverage(a: FeedMatch, b: FeedMatch, direction: 1 | -1): number {
   return (a.coverage - b.coverage) * direction;
 }
 
-function coveragePct(m: FeedMatch): number | null {
-  return m.coverage == null ? null : Math.round(m.coverage * 100);
-}
-
 export function MatchesView() {
   const { userId, isBooting } = useCurrentUser();
   const feed = useFeedMatches(userId);
+  const tracked = useTrackedMatches(userId);
 
+  const [onlyNew, setOnlyNew] = useState(false);
   const [priority, setPriority] = useState<number | null>(null);
   const [country, setCountry] = useState<string>("");
   const [sort, setSort] = useState<SortMode>("default");
@@ -94,6 +61,19 @@ export function MatchesView() {
   const [open, setOpen] = useState<FeedMatch | null>(null);
 
   const all = useMemo(() => feed.data ?? [], [feed.data]);
+
+  // Le candidature già salvate, per indirizzo dell'annuncio: la card dice a che punto sono
+  const savedByUrl = useMemo(() => {
+    const map = new Map<string, TrackedMatch>();
+    for (const group of tracked.data ?? []) {
+      for (const item of group.items) {
+        const url = item.listing?.source_url;
+        if (url) map.set(url, item);
+      }
+    }
+    return map;
+  }, [tracked.data]);
+
   const thesisCount = useMemo(() => all.filter((m) => m.kind === "thesis").length, [all]);
   // Tesi e dottorati non sono candidature da lavoro: restano fuori finché
   // non si accende il filtro. Conteggi e menu si calcolano su questa lista.
@@ -127,9 +107,14 @@ export function MatchesView() {
   const activeCountry = countries.some((c) => c.code === country) ? country : "";
   const activePriority = priorities.some(([p]) => p === priority) ? priority : null;
 
+  const newCount = useMemo(() => matches.filter((m) => m.is_new).length, [matches]);
+  // A zero il filtro non ha nulla da mostrare: vale come spento.
+  const activeNew = onlyNew && newCount > 0;
+
   const filtered = useMemo(() => {
     const list = matches.filter(
       (m) =>
+        (!activeNew || m.is_new) &&
         (activePriority == null || m.priority === activePriority) &&
         (activeCountry === "" || m.region === activeCountry),
     );
@@ -137,19 +122,20 @@ export function MatchesView() {
     if (sort === "coverage_desc") return [...list].sort((a, b) => byCoverage(a, b, -1));
     if (sort === "coverage_asc") return [...list].sort((a, b) => byCoverage(a, b, 1));
     return list;
-  }, [matches, activePriority, activeCountry, sort]);
+  }, [matches, activeNew, activePriority, activeCountry, sort]);
 
   const belowCount = useMemo(() => filtered.filter((m) => m.below_threshold).length, [filtered]);
   // Il gruppo di ruoli sulla card serve solo se nella lista ce n'è più d'uno.
   const showCategory = useMemo(() => new Set(filtered.map((m) => m.category)).size > 1, [filtered]);
-  const hasFilters = activePriority != null || activeCountry !== "";
+  const hasFilters = activeNew || activePriority != null || activeCountry !== "";
 
   // Ogni cambio di filtro o ordine riparte dalla prima pagina.
   const changePriority = (p: number | null) => { setPriority(p); setVisible(PAGE_SIZE); };
   const changeCountry = (c: string) => { setCountry(c); setVisible(PAGE_SIZE); };
   const changeSort = (s: SortMode) => { setSort(s); setVisible(PAGE_SIZE); };
   const toggleThesis = () => { setShowThesis((v) => !v); setVisible(PAGE_SIZE); };
-  const resetFilters = () => { setPriority(null); setCountry(""); setVisible(PAGE_SIZE); };
+  const toggleNew = () => { setOnlyNew((v) => !v); setVisible(PAGE_SIZE); };
+  const resetFilters = () => { setPriority(null); setCountry(""); setOnlyNew(false); setVisible(PAGE_SIZE); };
 
   if (isBooting) return <Shell><Loading /></Shell>;
 
@@ -212,6 +198,10 @@ export function MatchesView() {
   }
 
   const shown = filtered.slice(0, visible);
+  // Il dettaglio si ricalcola a ogni render: appena l'annuncio viene salvato, lo stato arriva da solo.
+  const openView: MatchView | null = open
+    ? fromFeed(open, open.source_url ? savedByUrl.get(open.source_url) : undefined)
+    : null;
 
   return (
     <Shell
@@ -222,6 +212,15 @@ export function MatchesView() {
         aria-label="Filtri"
         className="mt-6 flex flex-wrap items-end gap-x-3 gap-y-3 border-y border-line py-3"
       >
+        <FilterToggle
+          pressed={activeNew}
+          disabled={newCount === 0}
+          onClick={toggleNew}
+          count={newCount}
+          title={newCount === 0 ? "Nessun annuncio nuovo da ieri" : undefined}
+        >
+          Nuovi da ieri
+        </FilterToggle>
         <FilterSelect
           label="Priorità"
           value={activePriority == null ? "" : String(activePriority)}
@@ -250,20 +249,9 @@ export function MatchesView() {
           ))}
         </FilterSelect>
         {thesisCount > 0 && (
-          <button
-            type="button"
-            aria-pressed={showThesis}
-            onClick={toggleThesis}
-            className={cn(
-              "jm-press inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium sm:h-10",
-              showThesis
-                ? "border-accent bg-accent text-paper-2"
-                : "border-line-hard bg-paper-2 text-ink hover:border-accent",
-            )}
-          >
+          <FilterToggle pressed={showThesis} onClick={toggleThesis} count={thesisCount}>
             Tesi e dottorati
-            <span className="font-mono text-xs opacity-80">{thesisCount}</span>
-          </button>
+          </FilterToggle>
         )}
       </section>
 
@@ -290,7 +278,12 @@ export function MatchesView() {
           <ul className="mt-3 grid grid-cols-1 items-start gap-3 md:grid-cols-2 2xl:grid-cols-3">
             {shown.map((m, i) => (
               <li key={`${m.source_url ?? ""}|${m.title ?? ""}|${m.company_name ?? ""}|${i}`} className="min-w-0">
-                <MatchCard m={m} showCategory={showCategory} onOpen={() => setOpen(m)} />
+                <MatchCard
+                  m={m}
+                  saved={m.source_url ? savedByUrl.get(m.source_url) : undefined}
+                  showCategory={showCategory}
+                  onOpen={() => setOpen(m)}
+                />
               </li>
             ))}
           </ul>
@@ -312,7 +305,7 @@ export function MatchesView() {
         </>
       )}
 
-      <MatchDetailSheet m={open} onClose={() => setOpen(null)} />
+      <MatchDetailSheet view={openView} onClose={() => setOpen(null)} />
     </Shell>
   );
 }
@@ -331,6 +324,42 @@ function Shell({ lead, note, children }: { lead?: string; note?: string; childre
   );
 }
 
+function FilterToggle({
+  pressed,
+  onClick,
+  count,
+  disabled,
+  title,
+  children,
+}: {
+  pressed: boolean;
+  onClick: () => void;
+  count: number;
+  disabled?: boolean;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+      className={cn(
+        "jm-press inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium sm:h-10",
+        pressed
+          ? "border-accent bg-accent text-paper-2"
+          : "border-line-hard bg-paper-2 text-ink hover:border-accent",
+        disabled && "border-dashed text-ink-soft hover:border-line-hard",
+      )}
+    >
+      {children}
+      <span className="font-mono text-xs opacity-80">{count}</span>
+    </button>
+  );
+}
+
 function FilterSelect({
   label,
   value,
@@ -344,7 +373,7 @@ function FilterSelect({
 }) {
   return (
     <label className="flex min-w-0 flex-1 basis-40 flex-col gap-1 sm:flex-none sm:basis-auto">
-      <span className="text-xs font-medium text-ink-faint">{label}</span>
+      <span className="text-xs font-medium text-ink-soft">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -360,112 +389,14 @@ function FilterSelect({
 /* Scheda compatta di un match                                                 */
 /* -------------------------------------------------------------------------- */
 
-function CoverageBar({ m, size = "sm" }: { m: FeedMatch; size?: "sm" | "lg" }) {
-  const pct = coveragePct(m);
-  if (pct == null) return <p className="text-xs text-ink-faint">Copertura non misurabile</p>;
-  return (
-    <div className="flex items-center gap-3">
-      <div
-        role="progressbar"
-        aria-label="Copertura delle skill richieste"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={pct}
-        aria-valuetext={`${pct}%`}
-        className={cn("flex-1 overflow-hidden rounded-full bg-accent-wash", size === "lg" ? "h-2.5" : "h-1.5")}
-      >
-        {pct > 0 && (
-          <div
-            className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-teal-soft" : "bg-accent")}
-            style={{ width: `${pct}%` }}
-          />
-        )}
-      </div>
-      <span
-        className={cn(
-          "shrink-0 font-mono leading-none tracking-[-0.02em] tabular-nums",
-          size === "lg" ? "text-3xl" : "text-lg",
-        )}
-      >
-        {pct}%
-      </span>
-    </div>
-  );
-}
-
-/** Sotto questa soglia di skill misurate la percentuale dice poco (vedi pipeline.py). */
-const LOW_DATA_SKILLS = 3;
-
-function isLowData(m: FeedMatch): boolean {
-  return m.coverage != null && m.skills_measured < LOW_DATA_SKILLS;
-}
-
-/** "1 di 1 skill": su quante skill dell'annuncio è calcolata la percentuale. */
-function skillsBasis(m: FeedMatch): string {
-  return `${m.matched_skills.length} di ${m.skills_measured} skill`;
-}
-
-function LowDataTag() {
-  return (
-    <span
-      className="rounded-full border border-dashed border-line-hard px-2 py-0.5 text-xs font-medium text-ink-soft"
-      title="La percentuale è calcolata su meno di 3 skill dell'annuncio"
-    >
-      Pochi dati
-    </span>
-  );
-}
-
-function BelowTag() {
-  return (
-    <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-ink-soft">{BELOW_LABEL}</span>
-  );
-}
-
-/** Colonna in alto a destra della card: percentuale, barra corta, etichette. */
-function CardScore({ m }: { m: FeedMatch }) {
-  const pct = coveragePct(m);
-  if (pct == null) {
-    return (
-      <div className="w-24 shrink-0 text-right">
-        <span className="font-mono text-lg leading-none text-ink-faint">—</span>
-        <p className="mt-1 text-xs text-ink-faint">non misurabile</p>
-      </div>
-    );
-  }
-  const low = isLowData(m);
-  return (
-    <div className="flex w-24 shrink-0 flex-col items-end gap-1.5">
-      <span className="font-mono text-xl leading-none tracking-[-0.02em] tabular-nums">{pct}%</span>
-      <div
-        role="progressbar"
-        aria-label="Copertura delle skill richieste"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={pct}
-        aria-valuetext={low ? `${pct}%, calcolata su ${skillsBasis(m)}` : `${pct}%`}
-        className="h-1.5 w-full overflow-hidden rounded-full bg-accent-wash"
-      >
-        {pct > 0 && (
-          <div
-            className={cn("jm-bar-fill h-full rounded-full", m.below_threshold ? "bg-teal-soft" : "bg-accent")}
-            style={{ width: `${pct}%` }}
-          />
-        )}
-      </div>
-      {low && <span className="font-mono text-xs text-ink-soft">{skillsBasis(m)}</span>}
-      {low && <LowDataTag />}
-      {m.below_threshold && <BelowTag />}
-    </div>
-  );
-}
-
 function MatchCard({
   m,
+  saved,
   showCategory,
   onOpen,
 }: {
   m: FeedMatch;
+  saved?: TrackedMatch;
   showCategory: boolean;
   onOpen: () => void;
 }) {
@@ -478,11 +409,12 @@ function MatchCard({
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-[17px] font-medium leading-snug tracking-[-0.01em] [overflow-wrap:anywhere]">
-            {/* Il pulsante copre tutta la card: un clic ovunque apre il dettaglio */}
+            {/* Un solo punto di arresto: il titolo. Il suo ::after copre tutta la card,
+                quindi anche «Apri dettagli» (solo visivo) apre il dettaglio con un clic. */}
             <button
               type="button"
               onClick={onOpen}
-              className="text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent"
+              className="jm-stretch text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent"
             >
               {m.title ?? "Annuncio senza titolo"}
             </button>
@@ -502,139 +434,32 @@ function MatchCard({
             </ul>
           )}
         </div>
-        <CardScore m={m} />
+        <CardScore
+          m={{
+            coverage: m.coverage,
+            skillsMeasured: m.skills_measured,
+            have: m.matched_skills,
+            belowThreshold: m.below_threshold,
+          }}
+        />
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-3">
-        <span className="text-xs text-ink-faint">
-          {showCategory ? (CATEGORY_LABEL[m.category] ?? m.category) : ""}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft">
+          {saved && isTracked(saved.status) && <StatusTag status={saved.status} />}
+          {m.is_new && !saved && (
+            <span className="rounded-full border border-line-hard px-2 py-0.5 font-medium">Nuovo da ieri</span>
+          )}
+          {showCategory && <span>{CATEGORY_LABEL[m.category] ?? m.category}</span>}
         </span>
-        {m.source_url && (
-          <a
-            href={m.source_url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Apri l'annuncio ${m.title ?? ""} in una nuova scheda`}
-            className="jm-press relative z-10 inline-flex h-10 items-center gap-1 rounded-full bg-accent px-4 text-sm font-medium text-paper-2 hover:bg-accent-ink"
-          >
-            Apri
-            <ArrowUpRight className="h-4 w-4" aria-hidden />
-          </a>
-        )}
+        <span
+          aria-hidden
+          className="inline-flex h-10 shrink-0 items-center gap-1 rounded-full border border-line-hard bg-paper-2 pl-4 pr-3 text-sm font-medium text-ink transition-colors group-hover:border-accent"
+        >
+          Apri dettagli
+          <ChevronRight className="h-4 w-4" />
+        </span>
       </div>
     </article>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Dettaglio completo (pannello laterale)                                      */
-/* -------------------------------------------------------------------------- */
-
-function MatchDetailSheet({ m, onClose }: { m: FeedMatch | null; onClose: () => void }) {
-  const seen = m ? seenLabel(m.first_seen_at) : null;
-  return (
-    <Dialog.Root open={!!m} onOpenChange={(o) => !o && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/30" />
-        <Dialog.Content
-          aria-describedby={undefined}
-          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-y-auto border-l border-line bg-paper p-5 font-sans text-ink focus:outline-none sm:p-8"
-        >
-          {m && (
-            <>
-              <div className="flex items-start justify-between gap-4">
-                <p className="text-sm text-ink-faint">
-                  Priorità {m.priority} · {CATEGORY_LABEL[m.category] ?? m.category}
-                </p>
-                <Dialog.Close
-                  aria-label="Chiudi dettaglio"
-                  className="jm-press -mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-surface"
-                >
-                  <X className="h-5 w-5" aria-hidden />
-                </Dialog.Close>
-              </div>
-              <Dialog.Title className="mt-1 text-2xl font-medium leading-tight tracking-[-0.02em] [overflow-wrap:anywhere]">
-                {m.title ?? "Annuncio senza titolo"}
-              </Dialog.Title>
-              <p className="mt-1 text-[15px] text-ink-soft">
-                {m.company_name ?? "Azienda non indicata"} · {regionLabel(m.region)}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {m.kind === "thesis" && (
-                  <span className="rounded-full border border-line-hard px-2.5 py-1 text-xs font-medium text-ink-soft">
-                    Tesi o dottorato
-                  </span>
-                )}
-                {m.below_threshold && <BelowTag />}
-                {isLowData(m) && <LowDataTag />}
-              </div>
-
-              <div className="mt-6">
-                <p className="mb-2 text-xs font-medium text-ink-faint">Copertura delle skill richieste</p>
-                <CoverageBar m={m} size="lg" />
-                {isLowData(m) && (
-                  <p className="mt-2 text-sm text-ink-soft">
-                    Calcolata su {skillsBasis(m)}: con così pochi dati la percentuale è indicativa.
-                  </p>
-                )}
-              </div>
-
-              <dl className="mt-6 space-y-4">
-                <SkillRow label="Hai" skills={m.matched_skills} tone="have" />
-                <SkillRow label="Ti mancano" skills={m.missing_required} tone="missing" />
-                <SkillRow label="Gradite, non le hai" skills={m.missing_nice} tone="nice" />
-              </dl>
-
-              <div className="mt-auto flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <span className="font-mono text-xs text-ink-faint">{seen ? `Visto il ${seen}` : ""}</span>
-                {m.source_url && (
-                  <a
-                    href={m.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="jm-press inline-flex h-11 items-center justify-center gap-1.5 rounded-full bg-accent px-5 text-sm font-medium text-paper-2 hover:bg-accent-ink"
-                  >
-                    Apri l'annuncio
-                    <ArrowUpRight className="h-4 w-4" aria-hidden />
-                  </a>
-                )}
-              </div>
-            </>
-          )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-const SKILL_TONE = {
-  have: "border-transparent bg-good-wash text-good",
-  missing: "border-line-hard text-ink",
-  nice: "border-dashed border-line-hard text-ink-soft",
-} as const;
-
-function SkillRow({
-  label,
-  skills,
-  tone,
-}: {
-  label: string;
-  skills: string[];
-  tone: keyof typeof SKILL_TONE;
-}) {
-  if (skills.length === 0) return null;
-  return (
-    <div>
-      <dt className="mb-1.5 text-xs font-medium text-ink-faint">
-        {label} <span className="font-mono">({skills.length})</span>
-      </dt>
-      <dd className="flex flex-wrap gap-1.5">
-        {skills.map((s) => (
-          <span key={s} className={cn("rounded-full border px-2.5 py-1 font-mono text-xs", SKILL_TONE[tone])}>
-            {s}
-          </span>
-        ))}
-      </dd>
-    </div>
   );
 }

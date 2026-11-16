@@ -149,6 +149,8 @@ def test_run_matching_result_fields(orm, add_user, run):
         "missing_nice": ["spark"],
         "skills_measured": 5,
         "first_seen_at": "2026-11-01T10:00:00",
+        "description": "Python, SQL, Docker, Kafka. Nice to have: Spark",
+        "is_new": False,
     }
 
 

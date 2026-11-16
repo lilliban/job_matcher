@@ -2,8 +2,10 @@
 Router: candidatura da link — CV e lettera su misura per UN annuncio,
 secondo linee guida/schema forniti dall'utente (testo e/o file).
 
-Non tocca il DB oltre alla lettura del profilo: i documenti non vengono
-salvati, l'export è senza stato (il frontend rimanda il testo).
+Senza `match_id` non tocca il DB oltre alla lettura del profilo: i documenti
+non vengono salvati, l'export è senza stato (il frontend rimanda il testo).
+Con `match_id` (la candidatura creata dal feed) i documenti generati vengono
+salvati su quel match, un documento per tipo.
 """
 import logging
 import re
@@ -26,6 +28,7 @@ from app.services.application_builder import (
 )
 from app.services.doc_generator import DocumentGenerator
 from app.services.llm_gateway import LLMGateway, LLMGatewayError
+from app.services.tracking import save_documents
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +61,21 @@ async def generate_application(
     job_text: Optional[str] = Form(None),
     guidelines: Optional[str] = Form(None),
     doc_types: str = Form("cv,cover_letter"),
+    match_id: Optional[str] = Form(None),
     files: list[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
 ):
     user = db.get(models.User, user_id)
     if not user:
         raise HTTPException(404, "Utente non trovato")
+
+    # la candidatura a cui agganciare i documenti: controllo PRIMA di spendere
+    # chiamate LLM che poi non saprei dove salvare
+    match = None
+    if match_id:
+        match = db.get(models.Match, match_id)
+        if not match or not match.session or match.session.user_id != user_id:
+            raise HTTPException(404, "Candidatura non trovata")
 
     wanted = [d.strip() for d in doc_types.split(",") if d.strip()]
     if not wanted or any(d not in ALLOWED_DOC_TYPES for d in wanted):
@@ -106,11 +118,15 @@ async def generate_application(
         logger.exception("Generazione candidatura fallita")
         raise HTTPException(500, f"Generazione fallita: {exc}") from exc
 
+    if match is not None:
+        save_documents(db, match, documents, llm.last_model_used)
+
     return {
         "listing": listing,
         "documents": documents,
         "guidelines_chars": len(combined_guidelines),
         "llm_model": llm.last_model_used,
+        "match_id": match.id if match is not None else None,
     }
 
 

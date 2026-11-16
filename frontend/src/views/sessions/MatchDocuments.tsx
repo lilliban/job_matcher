@@ -56,7 +56,7 @@ export function MatchDocuments({ matchId }: { matchId: string }) {
   if (!docs.data || docs.data.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-line p-4 text-sm text-ink-faint">
-        Nessun documento ancora generato per questo match.
+        Nessun documento ancora. «Prepara CV e lettera» li crea.
       </div>
     );
   }

@@ -329,9 +329,68 @@ class MatchOut(BaseModel):
     created_at: datetime
 
 
-class MatchDetailOut(MatchOut):
+class MatchInsightOut(BaseModel):
+    """La stessa metrica del feed, calcolata al volo su un annuncio salvato:
+    copertura delle skill ("N di M skill"), skill che hai e che ti mancano.
+    Non è scritta nel database."""
+    coverage: Optional[float] = Field(
+        default=None, description="0–1; None se nel testo non c'è nessuna skill riconoscibile"
+    )
+    skills_measured: int = 0
+    have: list[str] = []
+    missing_required: list[str] = []
+    missing_nice: list[str] = []
+    below_threshold: bool = False
+    country_code: Optional[str] = None
+    off_profile: bool = Field(
+        default=False, description="Titolo non tech o copertura zero: va in fondo, sotto «Poco legati al tuo profilo»"
+    )
+    origin: str = Field(default="search", description='"search" (ricerca) oppure "feed" (salvato dal feed)')
+    pertinenza_uniform: bool = Field(
+        default=False, description="Il punteggio della ricerca (Pertinenza) è uguale per tutti gli annunci"
+    )
+
+
+class MatchDetailOut(MatchOut, MatchInsightOut):
     listing: Optional[JobListingOut] = None
     documents: list["GeneratedDocumentOut"] = []
+
+
+class DocumentBriefOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    doc_type: str
+    created_at: datetime
+
+
+class TrackedMatchOut(MatchOut, MatchInsightOut):
+    """Una candidatura: un match con uno stato da candidatura, l'annuncio e i
+    documenti (senza il testo: si aprono dal dettaglio)."""
+    listing: Optional[JobListingOut] = None
+    documents: list[DocumentBriefOut] = []
+
+
+class TrackedGroupOut(BaseModel):
+    status: str
+    label: str
+    count: int
+    items: list[TrackedMatchOut]
+
+
+class FeedSaveIn(BaseModel):
+    """Annuncio del feed da salvare come candidatura. La copertura non è nel
+    corpo: la ricalcola il server dal testo."""
+    user_id: str
+    title: str = Field(min_length=1, max_length=500)
+    company_name: Optional[str] = Field(default=None, max_length=300)
+    source_url: Optional[str] = Field(default=None, max_length=2000)
+    country_code: Optional[str] = Field(default=None, max_length=8)
+    region: str = Field(default="unknown", max_length=32)
+    description: Optional[str] = Field(default=None, max_length=60000)
+    first_seen_at: Optional[str] = Field(default=None, max_length=64)
+    status: Optional[str] = Field(
+        default=None, description="Stato iniziale; vuoto = «Salvata» (senza declassare una candidatura più avanti)"
+    )
 
 
 class MatchStatusUpdate(BaseModel):
@@ -365,6 +424,15 @@ class FeedMatchOut(BaseModel):
         "sotto 3 la percentuale è poco affidabile",
     )
     first_seen_at: Optional[str] = None
+    description: Optional[str] = Field(
+        default=None,
+        description="Il testo dell'annuncio su cui è calcolata la copertura (requisiti, o descrizione)",
+    )
+    is_new: bool = Field(
+        default=False,
+        description="Visto per la prima volta da ieri alle 00:00, con copertura almeno alla soglia "
+        "(o non misurabile ma di priorità 1)",
+    )
 
 
 # =====================================================================

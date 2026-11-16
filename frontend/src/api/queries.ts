@@ -469,7 +469,7 @@ export function useSessionMatches(userId: string | null, sessionId: string | nul
   return useQuery({
     queryKey: sessionKeys.matches(userId ?? "", sessionId ?? ""),
     queryFn: () =>
-      api<MatchDetailOut[]>(`/api/users/${userId}/sessions/${sessionId}/matches`),
+      api<SavedMatch[]>(`/api/users/${userId}/sessions/${sessionId}/matches`),
     enabled: !!userId && !!sessionId,
   });
 }
@@ -589,8 +589,15 @@ export function useUpdateMatchStatus() {
       api<MatchOut>(`/api/matches/${matchId}/status`, { method: "PATCH", json: body }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["matches", vars.matchId] });
+      // lo stato compare in Candidature e nell'elenco di ogni ricerca
+      qc.invalidateQueries({ queryKey: ["users"], predicate: (q) => isMatchListKey(q.queryKey) });
     },
   });
+}
+
+/** Le liste che mostrano uno stato: candidature e match di una ricerca. */
+function isMatchListKey(key: readonly unknown[]): boolean {
+  return key[2] === "tracked" || (key[2] === "sessions" && key[4] === "matches");
 }
 
 export function useMatchDocuments(matchId: string | null) {
@@ -626,17 +633,109 @@ export interface FeedMatch {
   /** Skill dell'annuncio su cui è calcolata la copertura (richieste + gradite); sotto 3 la percentuale è poco affidabile */
   skills_measured: number;
   first_seen_at: string | null;
+  /** Il testo su cui è calcolata la copertura */
+  description: string | null;
+  /** Visto per la prima volta da ieri, e sopra la soglia (o non misurabile ma di priorità 1) */
+  is_new: boolean;
 }
 
-export function useFeedMatches(userId: string | null) {
-  return useQuery({
-    queryKey: ["users", userId, "feed-matches"],
+export const feedKey = (userId: string | null) => ["users", userId, "feed-matches"] as const;
+
+function feedQueryOptions(userId: string | null) {
+  return {
+    queryKey: feedKey(userId),
     queryFn: () => api<FeedMatch[]>("/api/matches/feed", { query: { user_id: userId } }),
     enabled: !!userId,
     // il feed cambia poche volte al giorno e il confronto è pesante
     staleTime: 5 * 60 * 1000,
     // un 503 "feed non disponibile" non si risolve riprovando subito
     retry: false,
+  };
+}
+
+export function useFeedMatches(userId: string | null) {
+  return useQuery(feedQueryOptions(userId));
+}
+
+/** Quanti annunci "Nuovi da ieri" ci sono (tesi escluse). undefined finché il feed non è arrivato. */
+export function useNewMatchCount(userId: string | null): number | undefined {
+  const { data } = useQuery({
+    ...feedQueryOptions(userId),
+    select: (list: FeedMatch[]) => list.filter((m) => m.is_new && m.kind !== "thesis").length,
+  });
+  return data;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Candidature: annunci salvati dal feed o trovati da una ricerca               */
+/* -------------------------------------------------------------------------- */
+
+/** La stessa metrica del feed, calcolata dal server su un annuncio salvato. */
+export interface MatchInsight {
+  coverage: number | null;
+  skills_measured: number;
+  have: string[];
+  missing_required: string[];
+  missing_nice: string[];
+  below_threshold: boolean;
+  country_code: string | null;
+  /** Titolo non tech o copertura zero: in "Ricerche fatte" va in fondo */
+  off_profile: boolean;
+  origin: "search" | "feed";
+  /** Il punteggio della ricerca ("Pertinenza") è uguale per tutti gli annunci */
+  pertinenza_uniform: boolean;
+}
+
+/** Un match di una ricerca, con la copertura. `score` è la "Pertinenza". */
+export type SavedMatch = Omit<MatchDetailOut, keyof MatchInsight> & MatchInsight;
+
+export interface DocumentBrief {
+  id: string;
+  doc_type: string;
+  created_at: string;
+}
+
+export type TrackedMatch = Omit<SavedMatch, "documents"> & { documents: DocumentBrief[] };
+
+export interface TrackedGroup {
+  status: string;
+  label: string;
+  count: number;
+  items: TrackedMatch[];
+}
+
+export const trackedKey = (userId: string | null) => ["users", userId, "tracked"] as const;
+
+export function useTrackedMatches(userId: string | null) {
+  return useQuery({
+    queryKey: trackedKey(userId),
+    queryFn: () => api<TrackedGroup[]>("/api/matches/tracked", { query: { user_id: userId } }),
+    enabled: !!userId,
+  });
+}
+
+/** Salva un annuncio del feed (idempotente). Senza `status` diventa "Salvata". */
+export function useSaveFeedMatch(userId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ad, status }: { ad: FeedMatch; status?: string }) =>
+      api<TrackedMatch>("/api/matches/from-feed", {
+        method: "POST",
+        json: {
+          user_id: userId,
+          title: ad.title ?? "Annuncio senza titolo",
+          company_name: ad.company_name,
+          source_url: ad.source_url,
+          country_code: ad.country_code,
+          region: ad.region,
+          description: ad.description,
+          first_seen_at: ad.first_seen_at,
+          status: status ?? null,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: trackedKey(userId) });
+    },
   });
 }
 
@@ -772,15 +871,25 @@ export interface ApplicationResult {
   documents: Partial<Record<"cv" | "cover_letter", string>>;
   guidelines_chars: number;
   llm_model: string | null;
+  /** La candidatura a cui sono stati agganciati i documenti, se ne è stata indicata una */
+  match_id: string | null;
 }
 
 export function useGenerateApplication() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (formData: FormData) =>
       api<ApplicationResult>("/api/applications/generate", {
         method: "POST",
         formData,
       }),
+    onSuccess: (data) => {
+      // i documenti nuovi compaiono nella candidatura e nelle sue righe
+      if (data.match_id) {
+        qc.invalidateQueries({ queryKey: ["matches", data.match_id] });
+        qc.invalidateQueries({ queryKey: ["users"], predicate: (q) => isMatchListKey(q.queryKey) });
+      }
+    },
   });
 }
 

@@ -1,11 +1,43 @@
 """Stub heavy optional dependencies so pure-function tests run without extras."""
+import hashlib
 import importlib
+import os
 import sqlite3
 import sys
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+
+# ---------------------------------------------------------------------------
+# Nessun test deve scrivere sui database reali.
+#
+# `app.core.config` legge DATABASE_URL all'importazione (e load_dotenv non
+# sovrascrive una variabile già impostata): la punto a un file temporaneo PRIMA
+# che qualunque modulo dell'app venga importato. Così anche un test che
+# dimenticasse di sostituire `get_db` troverebbe un database vuoto e usa-e-getta,
+# non job_matcher.db.
+# ---------------------------------------------------------------------------
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+REAL_FILES = (PROJECT_ROOT / "job_matcher.db", PROJECT_ROOT / "feeds_cache" / "jobs.sqlite")
+_SCRATCH_DIR = tempfile.mkdtemp(prefix="jobmatcher-tests-")
+os.environ["DATABASE_URL"] = f"sqlite:///{Path(_SCRATCH_DIR, 'tests.db').as_posix()}"
+
+
+def _fingerprint(path: Path):
+    """(dimensione, data di modifica, sha256 per i file piccoli) o None se manca."""
+    if not path.exists():
+        return None
+    st = path.stat()
+    digest = None
+    if st.st_size < 50 * 1024 * 1024:  # il feed da ~240 MB si confronta solo per dimensione e data
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    return (st.st_size, st.st_mtime_ns, digest)
+
+
+_REAL_FINGERPRINTS = {p: _fingerprint(p) for p in REAL_FILES}
 
 for _mod in [
     "sqlalchemy",
@@ -30,7 +62,10 @@ _REAL_PREFIXES = (
     "app.database",
     "app.models",
     "app.routers",
-    "app.services.pipeline",
+    # tutti i servizi: alcuni (search_runner, llm_gateway, application_builder...)
+    # importano sqlalchemy, e se un altro modulo di test li ha caricati con lo
+    # stub resterebbero legati a un MagicMock
+    "app.services",
 )
 
 # Moduli reali già importati da un modulo di test precedente: si riusano
@@ -40,6 +75,21 @@ _real_modules: dict = {}
 
 def _is_real(name: str) -> bool:
     return any(name == p or name.startswith(p + ".") for p in _REAL_PREFIXES)
+
+
+def _relink_parents() -> None:
+    """Riallinea gli attributi dei pacchetti ai moduli reali in sys.modules.
+
+    `from app import models` e `from app.services import tracking` leggono
+    l'ATTRIBUTO del pacchetto, non sys.modules. Alla fine di un modulo di test
+    quegli attributi tornano ai moduli "stubbati" di prima; al modulo successivo
+    sys.modules ha di nuovo i moduli reali, ma i pacchetti puntano ancora ai
+    vecchi: un router importato per la prima volta lì si legava a un MagicMock."""
+    for name, mod in list(sys.modules.items()):
+        if _is_real(name):
+            parent, _, child = name.rpartition(".")
+            if parent in sys.modules:
+                setattr(sys.modules[parent], child, mod)
 
 
 @pytest.fixture(scope="module")
@@ -52,6 +102,7 @@ def orm():
         if _is_real(name):
             del sys.modules[name]
     sys.modules.update(_real_modules)
+    _relink_parents()
     try:
         sqlalchemy = importlib.import_module("sqlalchemy")
         sa_orm = importlib.import_module("sqlalchemy.orm")
